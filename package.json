@@ -1,0 +1,38 @@
+{
+  "name": "whatsapp-marketing-saas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-grade multi-tenant WhatsApp Marketing SaaS platform",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"API,WEB\" -c \"blue.bold,green.bold\" \"pnpm --filter @whatsapp-saas/api dev\" \"pnpm --filter @whatsapp-saas/web dev\"",
+    "dev:api": "pnpm --filter @whatsapp-saas/api dev",
+    "dev:web": "pnpm --filter @whatsapp-saas/web dev",
+    "dev:worker": "pnpm --filter @whatsapp-saas/worker dev",
+    "build": "pnpm -r --sort build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf \"**/dist\" \"**/node_modules\" \"**/.turbo\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@types/node": "^22.13.4",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.20.1",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.5.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.0",
+    "vitest": "^3.0.5"
+  }
+}
