@@ -6,8 +6,11 @@ import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { errorHandlerMiddleware } from './middleware/errorHandler.js';
+import cookieParser from 'cookie-parser';
 import { notFoundHandlerMiddleware } from './middleware/notFoundHandler.js';
 import { healthRouter } from './routes/health.routes.js';
+import { authRouter } from './modules/auth/auth.routes.js';
+import { workspaceRouter, invitationRouter } from './modules/workspaces/workspace.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -55,9 +58,10 @@ export function createApp(): Express {
     })
   );
 
-  // 5. Body Parsing with sensible payload limits
+  // 5. Body & Cookie Parsing with sensible payload limits
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+  app.use(cookieParser());
 
   // 6. HTTP Request Logging with Pino (Redaction configured in logger)
   app.use(
@@ -79,10 +83,15 @@ export function createApp(): Express {
   app.use('/', healthRouter);
   app.use(env.API_PREFIX, healthRouter);
 
-  // 8. 404 Handler for undefined routes
+  // 8. Authentication & Multi-Tenant Workspace Routes
+  app.use(`${env.API_PREFIX}/auth`, authRouter);
+  app.use(`${env.API_PREFIX}/workspaces`, workspaceRouter);
+  app.use(`${env.API_PREFIX}/invitations`, invitationRouter);
+
+  // 9. 404 Handler for undefined routes
   app.use(notFoundHandlerMiddleware);
 
-  // 9. Centralized Error Handler (must be last middleware)
+  // 10. Centralized Error Handler (must be last middleware)
   app.use(errorHandlerMiddleware);
 
   return app;

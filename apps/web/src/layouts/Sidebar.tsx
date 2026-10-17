@@ -17,8 +17,10 @@ import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
+import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import { NavItem } from './NavItem.js';
+import { useOptionalAuth } from '../features/auth/AuthContext.js';
 
 export const SIDEBAR_WIDTH = 264;
 
@@ -28,6 +30,9 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) => {
+  const auth = useOptionalAuth();
+  const currentWorkspace = auth?.currentWorkspace;
+
   const content = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Brand Header */}
@@ -151,6 +156,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
             icon={<SettingsOutlinedIcon fontSize="small" />}
             onClick={onMobileClose}
           />
+          <NavItem
+            id="nav-team"
+            to="/team"
+            label="Team & Members"
+            icon={<GroupOutlinedIcon fontSize="small" />}
+            onClick={onMobileClose}
+          />
         </List>
 
         <Divider sx={{ my: 2.5 }} />
@@ -206,10 +218,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose }) =
           Active Workspace
         </Typography>
         <Typography variant="body2" fontWeight={700} noWrap>
-          Acme Corp Marketing
+          {currentWorkspace?.name || 'Workspace'}
         </Typography>
         <Chip
-          label="Growth Tier"
+          label="Active"
           color="primary"
           variant="outlined"
           size="small"

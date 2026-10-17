@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    fileParallelism: false,
     alias: {
       '@whatsapp-saas/contracts': path.resolve(__dirname, '../../packages/contracts/src'),
       '@whatsapp-saas/domain': path.resolve(__dirname, '../../packages/domain/src'),

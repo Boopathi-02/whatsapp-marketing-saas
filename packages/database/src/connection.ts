@@ -145,3 +145,11 @@ export async function pingDatabase(): Promise<{ ok: boolean; latencyMs?: number;
     return { ok: false, latencyMs: Date.now() - startTime, error: msg };
   }
 }
+
+/**
+ * Validates whether a given string is a valid MongoDB ObjectId.
+ */
+export function isValidObjectId(id: string): boolean {
+  return mongoose.Types.ObjectId.isValid(id);
+}
+

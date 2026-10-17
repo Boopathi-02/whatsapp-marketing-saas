@@ -28,6 +28,15 @@ const EnvSchema = z.object({
     .default('5000'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  JWT_ACCESS_SECRET: z.string().min(16).default('dev-jwt-access-secret-32-chars-long-min!!'),
+  JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
+  REFRESH_TOKEN_EXPIRES_DAYS: z
+    .string()
+    .transform(val => parseInt(val, 10))
+    .pipe(z.number().positive())
+    .default('7'),
+  COOKIE_DOMAIN: z.string().optional(),
+  EMAIL_FROM: z.string().default('noreply@whatsapp-saas.local'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -7,13 +7,13 @@ The project is structured as a pnpm workspace with strict boundaries between use
 ```
 whatsapp-marketing-saas/
 ├── apps/
-│   ├── web/                     # React + Vite + MUI Customer & Admin Dashboard Shell
+│   ├── web/                     # React 18 + Vite + MUI Customer Dashboard Shell & Auth Pages
 │   ├── api/                     # Express.js REST API with security headers, logging & health probes
 │   └── worker/                  # Standalone background worker process for asynchronous queue workloads
 ├── packages/
 │   ├── contracts/               # Shared Zod schemas, API request/response envelopes, and DTOs
 │   ├── domain/                  # Pure domain entities, business validation rules, and status enums
-│   ├── database/                # Mongoose connection handling, lifecycle logging, and tenant query scoping
+│   ├── database/                # Mongoose connection handling, models, repositories & tenant query scoping
 │   ├── whatsapp-adapter/        # Meta Cloud API adapter interface and webhook event payloads
 │   └── billing/                 # Plan tier definitions, quota limits, and Stripe usage records
 ├── infrastructure/
@@ -28,24 +28,29 @@ whatsapp-marketing-saas/
 
 ```mermaid
 graph TD
-    Client[Web Browser / React Dashboard] -->|REST API Requests| API[Express API Service]
-    API -->|Read / Write with Tenant Scope| DB[(MongoDB)]
-    API -->|Enqueue Campaign Jobs| Redis[(Redis Broker)]
+    Client[Web Browser / React Dashboard] -->|Auth & Workspace REST APIs| API[Express API Service]
+    API -->|Session & Tenant Operations| DB[(MongoDB)]
+    API -->|Enqueue Workloads| Redis[(Redis Broker)]
     Worker[Background Worker Pool] -->|Consume Queue| Redis
     Worker -->|Dispatch Messages via HTTP| Meta[Meta WhatsApp Cloud API]
-    Meta -->|Webhooks / Delivery Status| API
+    Meta -->|Webhooks / Delivery Receipts| API
     Worker -->|Update Delivery Records| DB
 ```
 
-### 1. `apps/web` (Frontend Dashboard)
+### 1. `apps/web` (Frontend Dashboard & Customer Portal)
 - Built with React 18, TypeScript, Vite, Material UI (MUI v6), and TanStack Query.
 - Responsive layout featuring desktop drawer, mobile drawer, top navigation bar, and breadcrumbs.
-- Standalone resilience: Gracefully operates in interactive demo mode when API or database services are offline.
+- **Authentication**: `AuthProvider` and `useAuth` hook managing silent refresh restoration, user profile, and active workspace selection.
+- **Route Guarding**: `ProtectedRoute` protects all internal dashboard views (`/`, `/contacts`, `/templates`, `/campaigns`, `/settings`, `/team`), redirecting unauthenticated users to `/login`.
+- **Auth Pages**: Login, Registration, Forgot Password, Reset Password, Email Verification, Accept Invitation.
+- **Team Management**: Team Members page with role management dialogs and ownership transfer controls.
 
 ### 2. `apps/api` (REST API Gateway)
 - Express.js application decoupled across `app.ts` (factory) and `server.ts` (bootstrap).
-- Enforces correlation IDs (`X-Request-Id`), Helmet security headers, CORS origin restrictions, body payload size bounds, and centralized error envelopes.
-- Health checks: Liveness (`/health`) and real dependency readiness (`/health/ready`).
+- **Authentication Middleware**: `requireAuth` validates Bearer JWT access tokens and user status.
+- **Tenant Middleware**: `requireWorkspace(minRole)` enforces workspace membership and role hierarchy.
+- **Session Layer**: Refresh token rotation, reuse detection, and session revocation.
+- **Email Service Abstraction**: `IEmailService` for verification, password reset, and invitation emails.
 
 ### 3. `apps/worker` (Background Job Processor)
 - Dedicated Node.js process decoupled from HTTP request handling.
@@ -58,14 +63,6 @@ graph TD
 
 Logical tenant isolation is implemented across every layer:
 1. **Workspace Boundary**: Every business tenant operates within a dedicated `Workspace`.
-2. **Database Scoping**: All tenant-owned collections (`contacts`, `whatsapp_accounts`, `templates`, `campaigns`, `messages`) include an immutable `workspaceId` index.
-3. **Server-Side Verification**: Route handlers never trust client-supplied tenant identifiers in route params or body payloads. All queries are filtered through the verified `workspaceId` extracted from the server-validated JWT claim.
-
----
-
-## 4. Background Job Architecture (BullMQ)
-
-High-volume WhatsApp broadcasting requires decoupled asynchronous job execution:
-- **Campaign Dispatch Queue (`whatsapp-campaign-dispatch`)**: Partitions campaign recipients into 500-recipient batch chunks.
-- **Message Transmission Queue (`whatsapp-message-transmission`)**: Workers dispatch messages to Meta's Cloud API endpoints respecting the tenant's current Meta rate-limiting tier (Tier 1: 80 msgs/sec, Tier 2: 250 msgs/sec).
-- **Webhook Processing Queue (`whatsapp-webhook-processing`)**: Ingests incoming status updates (`sent`, `delivered`, `read`, `failed`) and updates telemetry counters without blocking the Meta webhook endpoint.
+2. **Server-Side Verification**: Route handlers never trust client-supplied tenant identifiers in route params or body payloads. All queries are filtered through the verified `workspaceId` extracted from the server-validated membership.
+3. **Database Scoping**: All tenant-owned collections include an immutable `workspaceId` index and explicit scoping.
+4. **IDOR Defense**: Access attempts across workspaces are blocked at middleware before any business handler is reached.

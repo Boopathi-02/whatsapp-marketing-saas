@@ -5,7 +5,7 @@
 - **Base URL Prefix**: `/api/v1`
 - **Protocol**: HTTPS (enforced in production)
 - **Content Type**: `application/json` (enforced with 1MB maximum payload limits)
-- **Versioning Strategy**: URI prefix versioning (`/api/v1`). Breaking changes will trigger an increment to `/api/v2` with a 90-day deprecation grace window.
+- **Versioning Strategy**: URI prefix versioning (`/api/v1`).
 
 ---
 
@@ -18,10 +18,7 @@ All API endpoints strictly follow predictable JSON response envelopes.
 ```json
 {
   "success": true,
-  "data": {
-    "id": "item-123",
-    "name": "Spring Campaign"
-  },
+  "data": { ... },
   "requestId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
@@ -32,15 +29,9 @@ All API endpoints strictly follow predictable JSON response envelopes.
 {
   "success": false,
   "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "The request payload is invalid",
-    "details": [
-      {
-        "field": "phoneNumber",
-        "message": "Phone number must match E.164 international format",
-        "code": "invalid_string"
-      }
-    ]
+    "code": "FORBIDDEN",
+    "message": "You do not have authorized membership in this workspace.",
+    "details": null
   },
   "requestId": "550e8400-e29b-41d4-a716-446655440000"
 }
@@ -50,56 +41,63 @@ All API endpoints strictly follow predictable JSON response envelopes.
 
 | Error Code | HTTP Status | Description |
 | :--- | :--- | :--- |
-| `VALIDATION_ERROR` | 422 | Request body or query parameters failed Zod validation |
+| `VALIDATION_ERROR` | 422 | Request body, query, or path params failed Zod validation |
 | `BAD_REQUEST` | 400 | Malformed JSON or syntactically invalid input |
-| `UNAUTHORIZED` | 401 | Missing, expired, or invalid authentication credentials |
-| `FORBIDDEN` | 403 | User lacks required role permissions within the workspace |
+| `UNAUTHORIZED` | 401 | Missing, expired, or invalid authentication token |
+| `FORBIDDEN` | 403 | User lacks required role permissions or does not belong to workspace |
 | `NOT_FOUND` | 404 | Endpoint or targeted resource does not exist |
-| `CONFLICT` | 409 | Duplicate resource (e.g. phone number already enrolled in workspace) |
-| `RATE_LIMITED` | 429 | Rate limit threshold exceeded |
-| `DATABASE_UNAVAILABLE` | 503 | Database connection temporarily lost or unreachable |
+| `CONFLICT` | 409 | Duplicate resource (e.g. email already registered) |
+| `EMAIL_ALREADY_EXISTS` | 409 | Public registration with existing email address |
+| `INVALID_CREDENTIALS` | 401 | Incorrect email or password on login |
+| `TOKEN_EXPIRED` | 401 | JWT access token or verification token has expired |
+| `TOKEN_REVOKED` | 401 | Refresh token or session was revoked |
+| `INVITATION_INVALID` | 400 | Invitation token is invalid or does not match email |
+| `INVITATION_EXPIRED` | 400 | Workspace invitation expired past 7-day validity |
+| `LAST_OWNER_CANNOT_BE_REMOVED` | 400 | Attempted to demote or remove the sole owner of a workspace |
+| `RATE_LIMIT_EXCEEDED` | 429 | Rate limit threshold exceeded on authentication endpoints |
 | `INTERNAL_SERVER_ERROR`| 500 | Unhandled internal exception (sanitized in production) |
 
 ---
 
-## 3. Health & Liveness Endpoints
+## 3. Implemented Endpoints (Phase 2)
 
-### 1. `GET /api/v1/health` (Liveness Probe)
-- **Purpose**: Verifies the API server process is alive and accepting incoming HTTP connections.
-- **Response**: `200 OK`
-```json
-{
-  "success": true,
-  "data": {
-    "status": "healthy",
-    "timestamp": "2026-10-16T11:30:00.000Z",
-    "uptimeSeconds": 1420,
-    "version": "1.0.0",
-    "environment": "development"
-  },
-  "requestId": "b06871be-cf2c-4ec1-91a5-8e3adcb502df"
-}
-```
+### Authentication (`/api/v1/auth`)
 
-### 2. `GET /api/v1/health/ready` (Readiness Probe)
-- **Purpose**: Verifies that external infrastructure dependencies (MongoDB) are connected and responding.
-- **Behavior**:
-  - Returns `200 OK` if MongoDB `ping` command succeeds.
-  - Returns `503 Service Unavailable` if MongoDB is disconnected or unresponsive.
-  - Never reports healthy without active verification.
-```json
-{
-  "success": true,
-  "data": {
-    "status": "ready",
-    "timestamp": "2026-10-16T11:30:00.000Z",
-    "services": {
-      "database": {
-        "status": "connected",
-        "latencyMs": 4
-      }
-    }
-  },
-  "requestId": "b06871be-cf2c-4ec1-91a5-8e3adcb502df"
-}
-```
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/register` | None | Register new user; auto-provisions default workspace; sets HttpOnly refresh cookie |
+| `POST` | `/api/v1/auth/login` | None | Authenticate with email/password; returns user, access token; sets HttpOnly cookie |
+| `POST` | `/api/v1/auth/logout` | Optional | Revokes current session and clears `refreshToken` cookie |
+| `POST` | `/api/v1/auth/refresh` | Cookie / Body | Rotates refresh token; revokes entire family on reuse detection; returns new access token |
+| `GET` | `/api/v1/auth/me` | Bearer Token | Returns current authenticated user profile |
+| `POST` | `/api/v1/auth/verify-email` | None | Validates single-use token and marks email verified |
+| `POST` | `/api/v1/auth/forgot-password` | None | Dispatches password reset email (generic response prevents enumeration) |
+| `POST` | `/api/v1/auth/reset-password` | None | Resets password using single-use token; invalidates all active user sessions |
+
+### Workspaces (`/api/v1/workspaces`)
+
+| Method | Endpoint | Min Role | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/workspaces` | User | Create a new customer workspace and assign caller as `owner` |
+| `GET` | `/api/v1/workspaces` | User | List all active workspaces the user has membership in |
+| `GET` | `/api/v1/workspaces/:workspaceId` | `viewer` | Get detailed metadata for the specified workspace |
+| `PATCH` | `/api/v1/workspaces/:workspaceId` | `admin` | Update workspace properties (name) |
+
+### Team Members & Invitations
+
+| Method | Endpoint | Min Role | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/workspaces/:workspaceId/members` | `viewer` | List all active members of the workspace |
+| `POST` | `/api/v1/workspaces/:workspaceId/invitations` | `admin` | Invite a new user by email with role assignment |
+| `POST` | `/api/v1/invitations/:token/accept` | User | Accept an invitation to join a workspace |
+| `POST` | `/api/v1/invitations/:token/reject` | None | Reject a workspace invitation |
+| `PATCH` | `/api/v1/workspaces/:workspaceId/members/:memberId` | `admin` | Update member role (`admin`, `member`, `viewer`) |
+| `DELETE` | `/api/v1/workspaces/:workspaceId/members/:memberId` | `admin` | Remove member from workspace (guarantees last owner cannot be removed) |
+| `POST` | `/api/v1/workspaces/:workspaceId/transfer-ownership` | `owner` | Transfer workspace ownership to an active member |
+
+---
+
+## 4. Health & Liveness Endpoints
+
+- `GET /api/v1/health` (Liveness Probe — 200 OK)
+- `GET /api/v1/health/ready` (Readiness Probe — executes real MongoDB `ping`)

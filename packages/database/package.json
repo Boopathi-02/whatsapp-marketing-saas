@@ -17,6 +17,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@whatsapp-saas/contracts": "workspace:*",
     "@whatsapp-saas/domain": "workspace:*",
     "mongoose": "^8.10.1",
     "zod": "^3.24.2"
