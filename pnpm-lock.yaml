@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  tinypool: ^2.1.2
+
 importers:
 
   .:
@@ -50,6 +53,9 @@ importers:
       '@whatsapp-saas/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@whatsapp-saas/whatsapp-adapter':
+        specifier: workspace:*
+        version: link:../../packages/whatsapp-adapter
       argon2:
         specifier: ^0.45.1
         version: 0.45.1
@@ -71,6 +77,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
+      libphonenumber-js:
+        specifier: ^1.13.15
+        version: 1.13.15
       pino:
         specifier: ^9.6.0
         version: 9.14.0
@@ -138,6 +147,9 @@ importers:
       '@whatsapp-saas/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@whatsapp-saas/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -225,6 +237,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@whatsapp-saas/domain':
+        specifier: workspace:*
+        version: link:../domain
       zod:
         specifier: ^3.24.2
         version: 3.25.76
@@ -2060,6 +2075,9 @@ packages:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
 
+  libphonenumber-js@1.13.15:
+    resolution: {integrity: sha512-AHdhEQeDFEJ4GKDAQ9AwxChy+v2kUILUB3TGQRpkXMkWePjXTU/WQEzWVQoIx/Gz8fE73Wr5SEuZCy2vk8jrMQ==}
+
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
@@ -2653,9 +2671,9 @@ packages:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
 
-  tinypool@1.1.1:
-    resolution: {integrity: sha512-Zba82s87IFq9A9XmjiX5uZA/ARWDrB03OHlq+Vw1fSdt0I+4/Kutwy8BP4Y/y/aORMo61FQ0vIb5j44vSo5Pkg==}
-    engines: {node: ^18.0.0 || >=20.0.0}
+  tinypool@2.2.0:
+    resolution: {integrity: sha512-jBrmx4lYmaC9k/mgPbylxs7kBUxHtD8256up+HjLaDFfXScKJQyil+SWXSvhAtT7XHo+yTVlpB81PGmHP8oLSQ==}
+    engines: {node: ^20.0.0 || >=22.0.0}
 
   tinyrainbow@2.0.0:
     resolution: {integrity: sha512-op4nsTR47R6p0vMUUoYl/a+ljLFVtlfaXkLQmqfLR1qHma1h/ysYk4hEXZ880bf2CYgTskvTa/e196Vd5dDQXw==}
@@ -4654,6 +4672,8 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
 
+  libphonenumber-js@1.13.15: {}
+
   lines-and-columns@1.2.4: {}
 
   locate-path@6.0.0:
@@ -5248,7 +5268,7 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.7)
       picomatch: 4.0.7
 
-  tinypool@1.1.1: {}
+  tinypool@2.2.0: {}
 
   tinyrainbow@2.0.0: {}
 
@@ -5378,7 +5398,7 @@ snapshots:
       tinybench: 2.9.0
       tinyexec: 0.3.2
       tinyglobby: 0.2.17
-      tinypool: 1.1.1
+      tinypool: 2.2.0
       tinyrainbow: 2.0.0
       vite: 6.4.4(@types/node@22.20.5)(tsx@4.23.15)
       vite-node: 3.2.4(@types/node@22.20.5)(tsx@4.23.15)

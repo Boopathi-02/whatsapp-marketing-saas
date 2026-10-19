@@ -17,12 +17,12 @@ export const getComponentOverrides = (theme: Theme): Components<Omit<Theme, 'com
         },
         containedPrimary: {
           boxShadow: isDark
-            ? '0 4px 14px 0 rgba(16, 185, 129, 0.25)'
-            : '0 4px 14px 0 rgba(16, 185, 129, 0.2)',
+            ? '0 4px 14px 0 rgba(20, 184, 166, 0.25)'
+            : '0 4px 14px 0 rgba(20, 184, 166, 0.2)',
           '&:hover': {
             boxShadow: isDark
-              ? '0 6px 20px 0 rgba(16, 185, 129, 0.35)'
-              : '0 6px 20px 0 rgba(16, 185, 129, 0.3)',
+              ? '0 6px 20px 0 rgba(20, 184, 166, 0.35)'
+              : '0 6px 20px 0 rgba(20, 184, 166, 0.3)',
           },
         },
       },

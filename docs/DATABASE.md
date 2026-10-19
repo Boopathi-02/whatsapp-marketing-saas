@@ -130,15 +130,78 @@ The shared database layer (`@whatsapp-saas/database`) manages MongoDB connectivi
   - `{ userId: 1, usedAt: 1 }`
   - `{ expiresAt: 1 }` (TTL index)
 
+### 8. `whatsapp_accounts` (`WhatsAppAccountModel`)
+- Workspace-specific WhatsApp Business Accounts (WABA) connected via Meta Cloud API.
+- **Fields**:
+  - `_id`: `ObjectId`
+  - `workspaceId`: `ObjectId` (references `Workspace`)
+  - `wabaId`: `String` (trimmed, indexed)
+  - `phoneNumberId`: `String` (trimmed, indexed)
+  - `displayPhoneNumber`: `String` (trimmed)
+  - `displayName`: `String` (trimmed)
+  - `qualityRating`: `'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN'` (default: `'UNKNOWN'`)
+  - `status`: `'connected' | 'disconnected' | 'pending_verification' | 'degraded'`
+  - `accessTokenEncrypted`: `String` (authenticated AES-256-GCM encrypted format `iv:authTag:ciphertext`)
+  - `metadata`: `Record<string, unknown>`
+  - `lastSyncedAt`: `Date | null`
+  - `createdAt`, `updatedAt`: `Date`
+- **Indexes**:
+  - `{ workspaceId: 1, phoneNumberId: 1 }` (unique compound index — prevents duplicate phone registration per workspace)
+  - `{ phoneNumberId: 1 }` (index for rapid webhook event routing)
+  - `{ wabaId: 1 }` (index)
+- **Security**: The `toJSON` transform automatically deletes `accessTokenEncrypted`, `_id`, and `__v`.
+
+### 9. `webhook_events` (`WebhookEventModel`)
+- Durable store for Meta incoming webhooks and event deduplication.
+- **Fields**:
+  - `_id`: `ObjectId`
+  - `providerEventId`: `String` (unique Meta event/message identifier)
+  - `eventType`: `String` (e.g., `'messages'`, `'statuses'`, `'account_update'`)
+  - `phoneNumberId`: `String | null`
+  - `wabaId`: `String | null`
+  - `workspaceId`: `ObjectId | null` (resolved from provider phone number ID)
+  - `payload`: `Record<string, unknown>` (durably stored event data)
+  - `processed`: `Boolean` (default: `false`)
+  - `processedAt`: `Date | null`
+  - `receivedAt`: `Date`
+  - `createdAt`, `updatedAt`: `Date`
+- **Indexes**:
+  - `{ providerEventId: 1 }` (unique index — enforces provider-level event deduplication)
+  - `{ workspaceId: 1, receivedAt: -1 }` (index)
+  - `{ phoneNumberId: 1, receivedAt: -1 }` (index)
+
+### 10. `contacts` (`ContactModel`)
+- Tenant-scoped customer phone directory with marketing consent tracking and suppression.
+- **Fields**:
+  - `_id`: `ObjectId`
+  - `workspaceId`: `ObjectId` (references `Workspace`)
+  - `phoneNumber`: `String` (E.164 normalized format, e.g., `+14155552671`)
+  - `displayName`: `String`
+  - `email`: `String | null` (lowercase, trimmed)
+  - `tags`: `Array<String>` (indexed)
+  - `customFields`: `Record<string, string | number | boolean>`
+  - `source`: `'manual_entry' | 'csv_import' | 'meta_webhook' | 'api'`
+  - `consentStatus`: `'opted_in' | 'opted_out' | 'pending'` (default: `'pending'`)
+  - `consentSource`: `String | null`
+  - `consentTimestamp`: `Date | null`
+  - `isSuppressed`: `Boolean` (default: `false`, indexed)
+  - `suppressedAt`: `Date | null`
+  - `suppressionReason`: `String | null`
+  - `createdAt`, `updatedAt`: `Date`
+- **Indexes**:
+  - `{ workspaceId: 1, phoneNumber: 1 }` (unique compound index — guarantees strict tenant isolation and prevents duplicate phone numbers per workspace)
+  - `{ workspaceId: 1, isSuppressed: 1 }` (compound index for fast suppression filtering)
+  - `{ workspaceId: 1, tags: 1 }` (compound index for tag segmentation)
+  - `{ workspaceId: 1, consentStatus: 1 }` (compound index for compliance queries)
+
 ---
 
-## 3. Upcoming Collections (Phase 3 & 4 Planned)
+## 3. Upcoming Collections (Phase 4 & 5 Planned)
 
-- `whatsapp_accounts`: Official Meta WABA credentials and access tokens.
-- `contacts`: Customer contact phone directory, opt-in consent states, and audience tags.
 - `message_templates`: Synchronized WhatsApp approved templates from Meta Graph API.
 - `campaigns`: WhatsApp broadcasts and scheduling.
 - `messages`: Message dispatch logs, Meta message IDs, and delivery telemetry.
+- `subscriptions`: Stripe billing plans, quotas, and subscription states.
 
 ---
 
@@ -148,4 +211,4 @@ To safeguard against multi-tenant data contamination:
 1. Every query executed on a tenant resource MUST resolve through `requireWorkspace(minRole)` middleware.
 2. Repositories enforce explicit workspace filtering (`{ workspaceId: new Types.ObjectId(workspaceId) }`).
 3. Cross-tenant access is rejected with `403 FORBIDDEN` before reaching any business logic.
-4. Mongoose models use strict schemas with compound uniqueness constraints to prevent concurrent race conditions.
+4. Mongoose models use strict schemas with compound uniqueness constraints (`{ workspaceId: 1, phoneNumber: 1 }`) to prevent concurrent race conditions.

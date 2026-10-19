@@ -100,6 +100,26 @@ class ApiClient {
   delete<T>(endpoint: string, options?: RequestInit) {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
+
+  async downloadBlob(endpoint: string): Promise<Blob> {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+    const headers: Record<string, string> = {};
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    }
+    if (this.currentWorkspaceId) {
+      headers['X-Workspace-Id'] = this.currentWorkspaceId;
+    }
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(`Download failed with status ${response.status}`);
+    }
+    return response.blob();
+  }
 }
 
 export const api = new ApiClient();

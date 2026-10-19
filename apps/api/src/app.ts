@@ -11,14 +11,19 @@ import { notFoundHandlerMiddleware } from './middleware/notFoundHandler.js';
 import { healthRouter } from './routes/health.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { workspaceRouter, invitationRouter } from './modules/workspaces/workspace.routes.js';
+import { whatsAppRouter } from './modules/whatsapp/whatsapp.routes.js';
+import { webhookRouter } from './modules/webhooks/webhook.routes.js';
+import { contactRouter } from './modules/contacts/contact.routes.js';
+import { templateRouter } from './modules/templates/template.routes.js';
+import { campaignRouter } from './modules/campaigns/campaign.routes.js';
+import { conversationRouter } from './modules/conversations/conversation.routes.js';
+import { quickReplyRouter } from './modules/quick-replies/quick-reply.routes.js';
 
 export function createApp(): Express {
   const app = express();
 
-  // 1. Trust proxy in production if behind reverse proxy/load balancer
-  if (env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1);
-  }
+  // 1. Trust proxy when behind reverse proxy/load balancer, ngrok tunnel, or cloud provider
+  app.set('trust proxy', 1);
 
   // 2. Correlation ID Middleware (generates or propagates X-Request-Id)
   app.use(requestIdMiddleware);
@@ -59,8 +64,16 @@ export function createApp(): Express {
   );
 
   // 5. Body & Cookie Parsing with sensible payload limits
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+  // Preserving raw request buffer for HMAC-SHA256 webhook signature verification
+  app.use(
+    express.json({
+      limit: '2mb',
+      verify: (req, _res, buf) => {
+        (req as { rawBody?: Buffer }).rawBody = buf;
+      },
+    })
+  );
+  app.use(express.urlencoded({ extended: true, limit: '2mb' }));
   app.use(cookieParser());
 
   // 6. HTTP Request Logging with Pino (Redaction configured in logger)
@@ -86,12 +99,21 @@ export function createApp(): Express {
   // 8. Authentication & Multi-Tenant Workspace Routes
   app.use(`${env.API_PREFIX}/auth`, authRouter);
   app.use(`${env.API_PREFIX}/workspaces`, workspaceRouter);
+  app.use(`${env.API_PREFIX}/workspaces/:workspaceId/whatsapp-accounts`, whatsAppRouter);
+  app.use(`${env.API_PREFIX}/workspaces/:workspaceId/contacts`, contactRouter);
+  app.use(`${env.API_PREFIX}/workspaces/:workspaceId/templates`, templateRouter);
+  app.use(`${env.API_PREFIX}/workspaces/:workspaceId/campaigns`, campaignRouter);
+  app.use(`${env.API_PREFIX}/workspaces/:workspaceId/conversations`, conversationRouter);
+  app.use(`${env.API_PREFIX}/workspaces/:workspaceId/quick-replies`, quickReplyRouter);
   app.use(`${env.API_PREFIX}/invitations`, invitationRouter);
 
-  // 9. 404 Handler for undefined routes
+  // 9. Public Webhooks (Meta Cloud API server-to-server)
+  app.use(`${env.API_PREFIX}/webhooks`, webhookRouter);
+
+  // 10. 404 Handler for undefined routes
   app.use(notFoundHandlerMiddleware);
 
-  // 10. Centralized Error Handler (must be last middleware)
+  // 11. Centralized Error Handler (must be last middleware)
   app.use(errorHandlerMiddleware);
 
   return app;

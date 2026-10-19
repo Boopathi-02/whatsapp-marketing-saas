@@ -33,7 +33,7 @@ export const VolumeChart: React.FC<VolumeChartProps> = ({ data }) => {
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#10B981' }} />
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#14B8A6' }} />
               <Typography variant="caption" color="text.secondary">
                 Delivered
               </Typography>
@@ -107,7 +107,7 @@ export const VolumeChart: React.FC<VolumeChartProps> = ({ data }) => {
                     <Typography variant="caption" display="block" sx={{ color: '#6366F1' }}>
                       Sent: {item.sent.toLocaleString()}
                     </Typography>
-                    <Typography variant="caption" display="block" sx={{ color: '#10B981' }}>
+                    <Typography variant="caption" display="block" sx={{ color: '#14B8A6' }}>
                       Delivered: {item.delivered.toLocaleString()} (
                       {Math.round((item.delivered / item.sent) * 100)}%)
                     </Typography>
@@ -140,7 +140,7 @@ export const VolumeChart: React.FC<VolumeChartProps> = ({ data }) => {
                     sx={{
                       width: '100%',
                       height: `${(deliveredHeightPercent / sentHeightPercent) * 100}%`,
-                      bgcolor: 'rgba(16, 185, 129, 0.35)',
+                      bgcolor: 'rgba(20, 184, 166, 0.35)',
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'flex-end',
@@ -151,7 +151,7 @@ export const VolumeChart: React.FC<VolumeChartProps> = ({ data }) => {
                       sx={{
                         width: '100%',
                         height: `${(readHeightPercent / deliveredHeightPercent) * 100}%`,
-                        bgcolor: '#10B981',
+                        bgcolor: '#14B8A6',
                         borderRadius: '4px 4px 0 0',
                       }}
                     />

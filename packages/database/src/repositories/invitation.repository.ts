@@ -132,11 +132,40 @@ export class InvitationRepository {
         );
 
         await session.commitTransaction();
-      } catch (err) {
-        await session.abortTransaction();
-        return { success: false, error: err instanceof Error ? err.message : String(err) };
+      } catch (err: unknown) {
+        await session.abortTransaction().catch(() => {});
+        const errorObj = err as { message?: string; code?: number };
+        const msg = errorObj?.message || '';
+        if (
+          msg.includes('replica set') ||
+          msg.includes('Transaction numbers') ||
+          msg.includes('retryable writes') ||
+          errorObj?.code === 20
+        ) {
+          // Sequential fallback
+          inv.status = 'accepted';
+          inv.acceptedAt = new Date();
+          await inv.save();
+
+          await WorkspaceMemberModel.findOneAndUpdate(
+            { workspaceId: inv.workspaceId, userId: userObjectId },
+            {
+              $setOnInsert: {
+                workspaceId: inv.workspaceId,
+                userId: userObjectId,
+                role: inv.role,
+                status: 'active',
+                invitedBy: inv.invitedBy,
+                joinedAt: new Date(),
+              },
+            },
+            { upsert: true }
+          );
+        } else {
+          return { success: false, error: err instanceof Error ? err.message : String(err) };
+        }
       } finally {
-        await session.endSession();
+        await session.endSession().catch(() => {});
       }
     } else {
       // Sequential fallback

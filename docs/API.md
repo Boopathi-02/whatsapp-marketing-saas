@@ -95,6 +95,37 @@ All API endpoints strictly follow predictable JSON response envelopes.
 | `DELETE` | `/api/v1/workspaces/:workspaceId/members/:memberId` | `admin` | Remove member from workspace (guarantees last owner cannot be removed) |
 | `POST` | `/api/v1/workspaces/:workspaceId/transfer-ownership` | `owner` | Transfer workspace ownership to an active member |
 
+### WhatsApp Business Accounts (`/api/v1/workspaces/:workspaceId/whatsapp-accounts`)
+
+| Method | Endpoint | Min Role | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/workspaces/:workspaceId/whatsapp-accounts` | `viewer` | List all WhatsApp Business Accounts connected to the workspace |
+| `GET` | `/api/v1/workspaces/:workspaceId/whatsapp-accounts/:accountId` | `viewer` | Get detailed status and metadata for a specific WhatsApp account |
+| `POST` | `/api/v1/workspaces/:workspaceId/whatsapp-accounts` | `admin` | Connect a WABA; encrypts access token at rest using AES-256-GCM |
+| `POST` | `/api/v1/workspaces/:workspaceId/whatsapp-accounts/:accountId/sync` | `admin` | Sync live phone number details, quality rating, and templates from Meta Graph API |
+| `POST` | `/api/v1/workspaces/:workspaceId/whatsapp-accounts/:accountId/disconnect` | `admin` | Safely disconnect an account, setting status to `disconnected` |
+| `DELETE` | `/api/v1/workspaces/:workspaceId/whatsapp-accounts/:accountId` | `admin` | Permanently remove a WhatsApp account and its credentials from the workspace |
+
+### Meta WhatsApp Webhooks (`/api/v1/webhooks/whatsapp`)
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/webhooks/whatsapp` | Meta Verify Token | Meta challenge handshake (`hub.mode`, `hub.verify_token`, `hub.challenge`) |
+| `POST` | `/api/v1/webhooks/whatsapp` | `X-Hub-Signature-256` | Ingest Meta webhook events with HMAC-SHA256 signature verification & deduplication |
+
+### Contact Directory (`/api/v1/workspaces/:workspaceId/contacts`)
+
+| Method | Endpoint | Min Role | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/workspaces/:workspaceId/contacts` | `viewer` | List paginated contacts with search, tag, consent, and suppression filters |
+| `GET` | `/api/v1/workspaces/:workspaceId/contacts/:contactId` | `viewer` | Get detailed record for a specific contact |
+| `POST` | `/api/v1/workspaces/:workspaceId/contacts` | `member` | Create contact; normalizes phone number to E.164 format and validates consent |
+| `PATCH` | `/api/v1/workspaces/:workspaceId/contacts/:contactId` | `member` | Update contact display name, email, tags, custom fields, and consent status |
+| `POST` | `/api/v1/workspaces/:workspaceId/contacts/:contactId/suppression` | `member` | Explicitly suppress or unsuppress a contact from future marketing campaigns |
+| `POST` | `/api/v1/workspaces/:workspaceId/contacts/import` | `member` | Bulk import contacts from CSV (5,000 row limit, upsert support, error reporting) |
+| `GET` | `/api/v1/workspaces/:workspaceId/contacts/export` | `viewer` | Export tenant contacts to downloadable CSV (filtered by tag, consent, suppression) |
+| `DELETE` | `/api/v1/workspaces/:workspaceId/contacts/:contactId` | `admin` | Permanently delete a contact from the workspace directory |
+
 ---
 
 ## 4. Health & Liveness Endpoints

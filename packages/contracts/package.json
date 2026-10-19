@@ -17,6 +17,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@whatsapp-saas/domain": "workspace:*",
     "zod": "^3.24.2"
   },
   "devDependencies": {

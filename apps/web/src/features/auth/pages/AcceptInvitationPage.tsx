@@ -12,6 +12,7 @@ import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
 import { useAuth } from '../AuthContext.js';
+import { PingzaLogo } from '../../../components/branding/PingzaLogo.js';
 
 export const AcceptInvitationPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
@@ -91,11 +92,13 @@ export const AcceptInvitationPage: React.FC = () => {
         }}
       >
         <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2.5 }}>
+          <PingzaLogo variant="icon" size={48} />
+
           <Box
             sx={{
-              width: 52,
-              height: 52,
-              borderRadius: 3,
+              width: 48,
+              height: 48,
+              borderRadius: 2.5,
               bgcolor: 'primary.light',
               display: 'flex',
               alignItems: 'center',
@@ -103,15 +106,15 @@ export const AcceptInvitationPage: React.FC = () => {
               color: 'primary.main',
             }}
           >
-            <GroupAddOutlinedIcon sx={{ fontSize: 32 }} />
+            <GroupAddOutlinedIcon sx={{ fontSize: 28 }} />
           </Box>
 
-          <Typography variant="h5" fontWeight={700} textAlign="center">
+          <Typography variant="h5" fontWeight={800} textAlign="center">
             Team Workspace Invitation
           </Typography>
 
           <Typography variant="body2" color="text.secondary" textAlign="center">
-            You have been invited to collaborate on WhatsApp marketing operations in this workspace.
+            You have been invited to join Pingza and collaborate on WhatsApp marketing operations in this workspace.
           </Typography>
 
           {successMessage && (

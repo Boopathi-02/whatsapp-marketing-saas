@@ -37,6 +37,29 @@ export class WorkspaceRepository {
     const ownerObjectId = new Types.ObjectId(data.ownerId);
 
     // Check if MongoDB replica set / transactions are supported
+    const createSequential = async (): Promise<WorkspaceDocument> => {
+      const ws = await WorkspaceModel.create({
+        name: data.name.trim(),
+        slug: data.slug.toLowerCase().trim(),
+        ownerId: ownerObjectId,
+        status: 'active',
+      });
+
+      try {
+        await WorkspaceMemberModel.create({
+          workspaceId: ws._id,
+          userId: ownerObjectId,
+          role: 'owner',
+          status: 'active',
+          joinedAt: new Date(),
+        });
+        return ws;
+      } catch (memberErr) {
+        await WorkspaceModel.findByIdAndDelete(ws._id);
+        throw memberErr;
+      }
+    };
+
     const session = await mongoose.startSession().catch(() => null);
     let workspaceDoc: WorkspaceDocument | null = null;
 
@@ -70,35 +93,25 @@ export class WorkspaceRepository {
 
         await session.commitTransaction();
         workspaceDoc = ws;
-      } catch (err) {
-        await session.abortTransaction();
-        throw err;
+      } catch (err: unknown) {
+        await session.abortTransaction().catch(() => {});
+        const errorObj = err as { message?: string; code?: number };
+        const msg = errorObj?.message || '';
+        if (
+          msg.includes('replica set') ||
+          msg.includes('Transaction numbers') ||
+          msg.includes('retryable writes') ||
+          errorObj?.code === 20
+        ) {
+          workspaceDoc = await createSequential();
+        } else {
+          throw err;
+        }
       } finally {
-        await session.endSession();
+        await session.endSession().catch(() => {});
       }
     } else {
-      // Standalone fallback: sequential with compensation rollback on error
-      const ws = await WorkspaceModel.create({
-        name: data.name.trim(),
-        slug: data.slug.toLowerCase().trim(),
-        ownerId: ownerObjectId,
-        status: 'active',
-      });
-
-      try {
-        await WorkspaceMemberModel.create({
-          workspaceId: ws._id,
-          userId: ownerObjectId,
-          role: 'owner',
-          status: 'active',
-          joinedAt: new Date(),
-        });
-        workspaceDoc = ws;
-      } catch (memberErr) {
-        // Rollback workspace creation
-        await WorkspaceModel.findByIdAndDelete(ws._id);
-        throw memberErr;
-      }
+      workspaceDoc = await createSequential();
     }
 
     if (!workspaceDoc) {
@@ -365,11 +378,25 @@ export class WorkspaceRepository {
         );
 
         await session.commitTransaction();
-      } catch (err) {
-        await session.abortTransaction();
-        return { success: false, error: err instanceof Error ? err.message : String(err) };
+      } catch (err: unknown) {
+        await session.abortTransaction().catch(() => {});
+        const errorObj = err as { message?: string; code?: number };
+        const msg = errorObj?.message || '';
+        if (
+          msg.includes('replica set') ||
+          msg.includes('Transaction numbers') ||
+          msg.includes('retryable writes') ||
+          errorObj?.code === 20
+        ) {
+          // Sequential fallback
+          await WorkspaceModel.updateOne({ _id: wsObjectId }, { $set: { ownerId: newOwnerObjectId } });
+          await WorkspaceMemberModel.updateOne({ workspaceId: wsObjectId, userId: newOwnerObjectId }, { $set: { role: 'owner' } });
+          await WorkspaceMemberModel.updateOne({ workspaceId: wsObjectId, userId: currentOwnerObjectId }, { $set: { role: 'admin' } });
+        } else {
+          return { success: false, error: err instanceof Error ? err.message : String(err) };
+        }
       } finally {
-        await session.endSession();
+        await session.endSession().catch(() => {});
       }
     } else {
       // Sequential fallback

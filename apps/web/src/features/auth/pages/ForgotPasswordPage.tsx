@@ -13,6 +13,7 @@ import {
 import LockResetOutlinedIcon from '@mui/icons-material/LockResetOutlined';
 import { Link as RouterLink } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
+import { PingzaLogo } from '../../../components/branding/PingzaLogo.js';
 
 export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -69,11 +70,12 @@ export const ForgotPasswordPage: React.FC = () => {
         }}
       >
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+            <PingzaLogo variant="icon" size={44} />
             <Box
               sx={{
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 borderRadius: 2.5,
                 bgcolor: 'primary.light',
                 display: 'flex',
@@ -82,13 +84,13 @@ export const ForgotPasswordPage: React.FC = () => {
                 color: 'primary.main',
               }}
             >
-              <LockResetOutlinedIcon sx={{ fontSize: 28 }} />
+              <LockResetOutlinedIcon sx={{ fontSize: 26 }} />
             </Box>
-            <Typography variant="h5" fontWeight={700} textAlign="center">
+            <Typography variant="h5" fontWeight={800} textAlign="center">
               Forgot password?
             </Typography>
             <Typography variant="body2" color="text.secondary" textAlign="center">
-              Enter your email and we'll dispatch single-use reset instructions
+              Enter your email and Pingza will dispatch single-use reset instructions
             </Typography>
           </Box>
 

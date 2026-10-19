@@ -23,6 +23,7 @@ declare global {
       user?: AuthContextUser;
       workspace?: IWorkspace;
       membership?: WorkspaceMembershipContext;
+      rawBody?: Buffer;
     }
   }
 }

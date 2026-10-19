@@ -20,8 +20,8 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ metrics }) => 
       trend: `+${metrics.contactsGrowthPercentage}% this month`,
       trendPositive: true,
       icon: <PeopleAltOutlinedIcon fontSize="medium" />,
-      color: '#10B981',
-      bgGradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.03) 100%)',
+      color: '#14B8A6',
+      bgGradient: 'linear-gradient(135deg, rgba(20, 184, 166, 0.15) 0%, rgba(20, 184, 166, 0.03) 100%)',
     },
     {
       id: 'metric-messages-sent',

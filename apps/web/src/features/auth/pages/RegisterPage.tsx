@@ -14,9 +14,9 @@ import {
 } from '@mui/material';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.js';
+import { PingzaLogo } from '../../../components/branding/PingzaLogo.js';
 
 export const RegisterPage: React.FC = () => {
   const { register } = useAuth();
@@ -87,28 +87,16 @@ export const RegisterPage: React.FC = () => {
       >
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           {/* Logo & Header */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: 2.5,
-                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff',
-                boxShadow: '0 8px 16px rgba(16, 185, 129, 0.25)',
-              }}
-            >
-              <WhatsAppIcon sx={{ fontSize: 28 }} />
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, mb: 1 }}>
+            <PingzaLogo variant="icon" size={48} />
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h5" fontWeight={800} textAlign="center">
+                Create your account
+              </Typography>
+              <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 0.5 }}>
+                Start marketing via official WhatsApp Business API with Pingza
+              </Typography>
             </Box>
-            <Typography variant="h5" fontWeight={700} textAlign="center">
-              Create your account
-            </Typography>
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              Start marketing via official WhatsApp Business API
-            </Typography>
           </Box>
 
           {errorMessage && (
@@ -183,7 +171,7 @@ export const RegisterPage: React.FC = () => {
                 py: 1.5,
                 fontWeight: 700,
                 borderRadius: 2,
-                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                boxShadow: '0 4px 14px rgba(20, 184, 166, 0.35)',
               }}
             >
               {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Get Started Free'}

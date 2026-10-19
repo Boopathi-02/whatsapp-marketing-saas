@@ -94,4 +94,50 @@ For every workspace-owned route:
   - `X-Frame-Options: SAMEORIGIN`
   - `X-Content-Type-Options: nosniff`
   - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
-- **Request Body Limits**: 1MB maximum payload size.
+- **Request Body Limits**: 2MB maximum payload size with raw body preservation for HMAC verification.
+
+---
+
+## 4. WhatsApp Cloud API & Webhook Security (Phase 3)
+
+### 4.1 Authenticated AES-256-GCM Credential Encryption
+- **Algorithm**: `AES-256-GCM` (Galois/Counter Mode with 256-bit key length).
+- **Security Attributes**: Provides both confidentiality and authenticity. Any tampering with the ciphertext, initialization vector (IV), or authentication tag results in immediate authentication failure and decryption refusal.
+- **Key Derivation & Storage**:
+  - Encrypted via `CREDENTIAL_ENCRYPTION_KEY` (32-byte hex/raw string validated by Zod at startup).
+  - Stored format: `iv:authTag:ciphertext` (hex-encoded).
+  - A cryptographically fresh 12-byte IV is generated for each encryption operation (`crypto.randomBytes(12)`).
+  - 16-byte authentication tag guarantees integrity.
+- **Data Protection**:
+  - Access tokens are NEVER stored in plaintext in the database.
+  - Plaintext tokens are NEVER logged (redacted in Pino and excluded from error messages).
+  - Access tokens are stripped from all API response envelopes by the `toJSON` transform on `WhatsAppAccountModel`.
+  - Frontend client never receives or stores access tokens; only masked connection metadata and quality ratings are displayed.
+
+### 4.2 Webhook HMAC-SHA256 Signature Verification
+- **Header**: Meta sends signatures in the `X-Hub-Signature-256` header formatted as `sha256=<hex_digest>`.
+- **Raw Body Requirement**: Signature computation requires the exact raw binary payload received over the wire before JSON deserialization. `express.json` is configured with a custom `verify` callback preserving `req.rawBody` as a `Buffer`.
+- **Timing-Safe Comparison**: Signatures are compared using `crypto.timingSafeEqual` over identical-length buffers. This completely eliminates timing attack vectors that could leak signature bytes.
+- **Verification Rejection**: Any missing signature, invalid header format, or signature mismatch immediately rejects the request with `401 UNAUTHORIZED` before any business processing occurs.
+
+### 4.3 Webhook Deduplication & Durable Persistence
+- **Durable Logging**: Webhook payloads are persisted to the `webhook_events` collection before HTTP acknowledgment (`200 OK`) is returned to Meta.
+- **Unique Provider Event IDs**: Unique index on `providerEventId` prevents double-processing of duplicate deliveries or retry attempts from Meta servers.
+- **Tenant Workspace Resolution**: Webhooks are received at a shared system endpoint (`/api/v1/webhooks/whatsapp`). The tenant workspace is resolved exclusively from the verified `phoneNumberId` in our database. Webhook payloads are NEVER trusted to supply their own `workspaceId`.
+
+---
+
+## 5. Contact Directory Privacy & Consent Invariants
+
+### 5.1 No Presumption of Consent
+- Possession of a phone number DOES NOT constitute marketing consent.
+- Newly imported or manually added contacts default to `consentStatus: 'pending'` unless explicitly designated with verified opt-in records.
+- Consent source and timestamps are recorded and auditable.
+
+### 5.2 Suppression Enforcement
+- Contacts marked `isSuppressed: true` are tracked with `suppressedAt` timestamp and reason.
+- Suppressed contacts are guaranteed to be filtered out of marketing campaign queries in Phase 4.
+
+### 5.3 Tenant Isolation Compound Indexes
+- Compound unique index on `{ workspaceId: 1, phoneNumber: 1 }` guarantees that contacts are strictly unique within each workspace, while completely preventing cross-workspace data collisions or leakage.
+- Contacts belonging to Workspace A are never visible, exportable, or mergeable with Workspace B.

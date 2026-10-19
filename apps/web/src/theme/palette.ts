@@ -3,15 +3,15 @@ import { PaletteMode, PaletteOptions } from '@mui/material';
 export const getPalette = (mode: PaletteMode): PaletteOptions => ({
   mode,
   primary: {
-    main: '#10B981', // Emerald WhatsApp-inspired accent
-    light: '#34D399',
-    dark: '#059669',
+    main: '#14B8A6', // Pingza Accent Teal
+    light: '#2DD4BF',
+    dark: '#0D9488',
     contrastText: '#FFFFFF',
   },
   secondary: {
-    main: '#6366F1', // Indigo
-    light: '#818CF8',
-    dark: '#4F46E5',
+    main: '#14213D', // Pingza Primary Navy
+    light: '#1F2E4D',
+    dark: '#0B1324',
     contrastText: '#FFFFFF',
   },
   info: {
@@ -39,8 +39,8 @@ export const getPalette = (mode: PaletteMode): PaletteOptions => ({
     paper: mode === 'dark' ? '#111827' : '#FFFFFF',
   },
   text: {
-    primary: mode === 'dark' ? '#F9FAFB' : '#0F172A',
-    secondary: mode === 'dark' ? '#9CA3AF' : '#64748B',
+    primary: mode === 'dark' ? '#F8FAFC' : '#0F172A',
+    secondary: mode === 'dark' ? '#94A3B8' : '#64748B',
   },
-  divider: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+  divider: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
 });

@@ -16,8 +16,8 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities }) => {
       case 'campaign_completed':
         return {
           icon: <CheckCircleOutlineIcon fontSize="small" />,
-          color: '#10B981',
-          bg: 'rgba(16, 185, 129, 0.12)',
+          color: '#14B8A6',
+          bg: 'rgba(20, 184, 166, 0.12)',
         };
       case 'template_approved':
         return {

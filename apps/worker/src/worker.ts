@@ -21,7 +21,7 @@ const logger = pino({
 
 async function startWorker(): Promise<void> {
   logger.info('====================================================');
-  logger.info('Starting WhatsApp Marketing SaaS Background Worker');
+  logger.info('Starting Pingza Background Worker');
   logger.info(`Environment: ${workerEnv.NODE_ENV}`);
   logger.info('====================================================');
 

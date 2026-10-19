@@ -10,6 +10,7 @@ import { AcceptInvitationPage } from '../features/auth/pages/AcceptInvitationPag
 import { DashboardPage } from '../features/dashboard/pages/DashboardPage.js';
 import { ContactsPage } from '../features/contacts/pages/ContactsPage.js';
 import { AccountsPage } from '../features/whatsapp-accounts/pages/AccountsPage.js';
+import { ConversationsPage } from '../features/conversations/pages/ConversationsPage.js';
 import { TemplatesPage } from '../features/templates/pages/TemplatesPage.js';
 import { CampaignsPage } from '../features/campaigns/pages/CampaignsPage.js';
 import { AnalyticsPage } from '../features/analytics/pages/AnalyticsPage.js';
@@ -65,6 +66,10 @@ export const router = createBrowserRouter([
           {
             path: 'whatsapp-accounts',
             element: <AccountsPage />,
+          },
+          {
+            path: 'conversations',
+            element: <ConversationsPage />,
           },
           {
             path: 'templates',

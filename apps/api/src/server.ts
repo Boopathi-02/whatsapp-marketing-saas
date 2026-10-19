@@ -39,7 +39,7 @@ async function bootstrap(): Promise<void> {
 
   // 2. Start HTTP Listener
   server.listen(env.API_PORT, env.API_HOST, () => {
-    logger.info(`WhatsApp Marketing SaaS API running at http://${env.API_HOST}:${env.API_PORT}`);
+    logger.info(`Pingza API running at http://${env.API_HOST}:${env.API_PORT}`);
     logger.info(`Health check available at http://${env.API_HOST}:${env.API_PORT}${env.API_PREFIX}/health`);
     logger.info(`Readiness probe available at http://${env.API_HOST}:${env.API_PORT}${env.API_PREFIX}/health/ready`);
   });

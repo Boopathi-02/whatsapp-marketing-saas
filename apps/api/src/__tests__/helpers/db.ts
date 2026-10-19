@@ -7,6 +7,9 @@ import {
   SessionModel,
   EmailVerificationTokenModel,
   PasswordResetTokenModel,
+  WhatsAppAccountModel,
+  WebhookEventModel,
+  ContactModel,
 } from '@whatsapp-saas/database';
 
 const TEST_MONGO_URI = process.env.TEST_MONGODB_URI || 'mongodb://localhost:27017/whatsapp_saas_test';
@@ -30,6 +33,9 @@ export async function clearTestDatabase(): Promise<void> {
     SessionModel.deleteMany({}),
     EmailVerificationTokenModel.deleteMany({}),
     PasswordResetTokenModel.deleteMany({}),
+    WhatsAppAccountModel.deleteMany({}),
+    WebhookEventModel.deleteMany({}),
+    ContactModel.deleteMany({}),
   ]);
 }
 

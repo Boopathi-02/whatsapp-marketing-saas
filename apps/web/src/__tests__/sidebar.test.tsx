@@ -9,7 +9,7 @@ describe('Sidebar Navigation Component', () => {
     render(
       <MemoryRouter>
         <ThemeModeProvider>
-          <Sidebar mobileOpen={false} onMobileClose={() => {}} />
+          <Sidebar mobileOpen={false} onMobileClose={() => { }} />
         </ThemeModeProvider>
       </MemoryRouter>
     );
@@ -18,6 +18,7 @@ describe('Sidebar Navigation Component', () => {
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Contacts').length).toBeGreaterThan(0);
     expect(screen.getAllByText('WhatsApp Accounts').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Live Inbox').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Message Templates').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Campaigns').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Analytics').length).toBeGreaterThan(0);
@@ -28,5 +29,22 @@ describe('Sidebar Navigation Component', () => {
     expect(screen.getAllByText('Super Admin').length).toBeGreaterThan(0);
     expect(screen.getAllByText('DEV ONLY').length).toBeGreaterThan(0);
     expect(screen.getAllByText('System Administration').length).toBeGreaterThan(0);
+
+    // Verify Pingza brand logo and subtitle are displayed
+    expect(screen.getAllByText('Ping').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('za').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('WhatsApp Marketing').length).toBeGreaterThan(0);
+  });
+
+  it('should render icon-only logo in collapsed sidebar state', () => {
+    render(
+      <MemoryRouter>
+        <ThemeModeProvider>
+          <Sidebar mobileOpen={false} onMobileClose={() => { }} collapsed={true} />
+        </ThemeModeProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getAllByLabelText('Pingza Home').length).toBeGreaterThan(0);
   });
 });

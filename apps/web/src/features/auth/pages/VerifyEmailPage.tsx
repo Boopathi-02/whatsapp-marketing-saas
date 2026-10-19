@@ -11,6 +11,7 @@ import {
 import MarkEmailReadOutlinedIcon from '@mui/icons-material/MarkEmailReadOutlined';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { api } from '../../../lib/api.js';
+import { PingzaLogo } from '../../../components/branding/PingzaLogo.js';
 
 export const VerifyEmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -66,11 +67,12 @@ export const VerifyEmailPage: React.FC = () => {
         }}
       >
         <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2.5 }}>
+          <PingzaLogo variant="icon" size={48} />
           <Box
             sx={{
-              width: 52,
-              height: 52,
-              borderRadius: 3,
+              width: 48,
+              height: 48,
+              borderRadius: 2.5,
               bgcolor: status === 'error' ? 'error.light' : 'success.light',
               display: 'flex',
               alignItems: 'center',
@@ -78,10 +80,10 @@ export const VerifyEmailPage: React.FC = () => {
               color: status === 'error' ? 'error.main' : 'success.main',
             }}
           >
-            <MarkEmailReadOutlinedIcon sx={{ fontSize: 32 }} />
+            <MarkEmailReadOutlinedIcon sx={{ fontSize: 28 }} />
           </Box>
 
-          <Typography variant="h5" fontWeight={700} textAlign="center">
+          <Typography variant="h5" fontWeight={800} textAlign="center">
             Email Verification
           </Typography>
 

@@ -37,4 +37,6 @@ Thumbs.db
 
 # Local databases
 mongo-data/
+.mongo_data/
 redis-data/
+

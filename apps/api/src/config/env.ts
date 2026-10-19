@@ -37,6 +37,20 @@ const EnvSchema = z.object({
     .default('7'),
   COOKIE_DOMAIN: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@whatsapp-saas.local'),
+  META_GRAPH_API_VERSION: z.string().default('v26.0'),
+  META_APP_ID: z.string().default('1113739574734996'),
+  META_APP_SECRET: z.string().default('219cc8bca8a0ea1bb2f3c7c34d44bc32'),
+  META_CONFIG_ID: z.string().default('1627798868778973'),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().default('12345678'),
+  CREDENTIAL_ENCRYPTION_KEY: z
+    .string()
+    .refine(
+      val => /^[0-9a-fA-F]{64}$/.test(val) || Buffer.byteLength(val, 'utf8') === 32,
+      {
+        message: 'CREDENTIAL_ENCRYPTION_KEY must be exactly 32 bytes (64 hex characters or 32-byte UTF-8 string)',
+      }
+    )
+    .default('a7d2e947cf8e3c1a89b0d3e5271a4f89c02b5e7d91a348f6c1e95b7a32d1840e'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

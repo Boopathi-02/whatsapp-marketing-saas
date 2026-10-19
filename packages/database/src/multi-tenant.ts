@@ -52,3 +52,21 @@ export function multiTenantPlugin(schema: Schema): void {
   // Automatically enforce compound index for workspace scoping
   schema.index({ workspaceId: 1, createdAt: -1 });
 }
+
+/**
+ * Checks whether an error indicates MongoDB transactions / replica set features
+ * are unavailable on the current standalone deployment.
+ */
+export function isReplicaSetError(err: unknown): boolean {
+  if (!err) return false;
+  const errorObj = err as { message?: string; code?: number; codeName?: string };
+  const msg = errorObj.message || String(err);
+  return (
+    msg.includes('replica set') ||
+    msg.includes('Transaction numbers') ||
+    msg.includes('retryable writes') ||
+    errorObj.code === 20 ||
+    errorObj.codeName === 'IllegalOperation'
+  );
+}
+
