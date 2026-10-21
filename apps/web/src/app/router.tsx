@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { DashboardLayout } from '../layouts/DashboardLayout.js';
 import { ProtectedRoute } from '../features/auth/ProtectedRoute.js';
 import { LoginPage } from '../features/auth/pages/LoginPage.js';
@@ -14,9 +14,7 @@ import { ConversationsPage } from '../features/conversations/pages/Conversations
 import { TemplatesPage } from '../features/templates/pages/TemplatesPage.js';
 import { CampaignsPage } from '../features/campaigns/pages/CampaignsPage.js';
 import { AnalyticsPage } from '../features/analytics/pages/AnalyticsPage.js';
-import { BillingPage } from '../features/billing/pages/BillingPage.js';
 import { SettingsPage } from '../features/settings/pages/SettingsPage.js';
-import { TeamMembersPage } from '../features/team/pages/TeamMembersPage.js';
 import { AdminPage } from '../features/admin/pages/AdminPage.js';
 import { EmptyState } from '../components/common/EmptyState.js';
 
@@ -84,16 +82,20 @@ export const router = createBrowserRouter([
             element: <AnalyticsPage />,
           },
           {
-            path: 'billing',
-            element: <BillingPage />,
-          },
-          {
             path: 'settings',
             element: <SettingsPage />,
           },
           {
+            path: 'settings/:tab',
+            element: <SettingsPage />,
+          },
+          {
+            path: 'billing',
+            element: <Navigate to="/settings?tab=billing" replace />,
+          },
+          {
             path: 'team',
-            element: <TeamMembersPage />,
+            element: <Navigate to="/settings?tab=team" replace />,
           },
           {
             path: 'admin',

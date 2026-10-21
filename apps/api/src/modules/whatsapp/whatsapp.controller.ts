@@ -4,7 +4,11 @@ import {
   ConnectWhatsAppAccountSchema,
   EmbeddedSignupCompletionSchema,
   UpdateBusinessProfileSchema,
+  AddPhoneNumberSchema,
+  BlockUsersSchema,
+  ListBlockedUsersQuerySchema,
 } from '@whatsapp-saas/contracts';
+import { whatsAppChannelService } from './whatsapp-channel.service.js';
 import { sendSuccess } from '../../utils/response.js';
 
 export class WhatsAppController {
@@ -120,7 +124,7 @@ export class WhatsAppController {
       const workspaceId = req.workspace!._id.toString();
       const accountId = req.params.accountId as string;
       const validated = UpdateBusinessProfileSchema.parse(req.body);
-      const result = await whatsAppService.updateBusinessProfile(workspaceId, accountId, validated);
+      const result = await whatsAppService.updateBusinessProfile(workspaceId, accountId, validated, req.user!.id);
       sendSuccess(res, result, 200, req.id);
     } catch (error) {
       next(error);
@@ -133,6 +137,87 @@ export class WhatsAppController {
       const accountId = req.params.accountId as string;
       const health = await whatsAppService.getAccountHealth(workspaceId, accountId);
       sendSuccess(res, health, 200, req.id);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async listPhoneNumbers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = await whatsAppChannelService.listWabaPhoneNumbers(req.workspace!._id.toString(), req.params.accountId as string);
+      sendSuccess(res, data, 200, req.id);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async addPhoneNumber(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { phoneNumberId } = AddPhoneNumberSchema.parse(req.body);
+      const data = await whatsAppChannelService.addPhoneNumber(
+        req.workspace!._id.toString(),
+        req.params.accountId as string,
+        phoneNumberId,
+        req.user!.id
+      );
+      sendSuccess(res, data, 201, req.id);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async reconnectAccount(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = await whatsAppChannelService.reconnectAccount(
+        req.workspace!._id.toString(),
+        req.params.accountId as string,
+        req.user!.id
+      );
+      sendSuccess(res, data, 200, req.id);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async listBlockedUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const query = ListBlockedUsersQuerySchema.parse(req.query);
+      const data = await whatsAppChannelService.listBlockedUsers(
+        req.workspace!._id.toString(),
+        req.params.accountId as string,
+        query
+      );
+      sendSuccess(res, data, 200, req.id);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async blockUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { users } = BlockUsersSchema.parse(req.body);
+      const data = await whatsAppChannelService.blockUsers(
+        req.workspace!._id.toString(),
+        req.params.accountId as string,
+        users,
+        req.user!.id
+      );
+      sendSuccess(res, data, 200, req.id);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async unblockUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { users } = BlockUsersSchema.parse(req.body);
+      const data = await whatsAppChannelService.unblockUsers(
+        req.workspace!._id.toString(),
+        req.params.accountId as string,
+        users,
+        req.user!.id
+      );
+      sendSuccess(res, data, 200, req.id);
     } catch (error) {
       next(error);
     }

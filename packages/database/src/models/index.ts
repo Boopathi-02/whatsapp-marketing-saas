@@ -15,5 +15,12 @@ export * from './conversation.model.js';
 export * from './message.model.js';
 export * from './quick_reply.model.js';
 export * from './onboarding_session.model.js';
+export * from './plan_version.model.js';
+export * from './subscription.model.js';
+export * from './wallet_account.model.js';
+export * from './ledger_entry.model.js';
+export * from './wallet_reservation.model.js';
+export * from './payment_transaction.model.js';
+export * from './audit_event.model.js';
 
 

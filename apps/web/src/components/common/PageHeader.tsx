@@ -28,7 +28,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         }}
       >
         <Box>
-          <Typography variant="h1" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, fontWeight: 700 }}>
+          <Typography variant="h1" component="h1">
             {title}
           </Typography>
           {subtitle && (

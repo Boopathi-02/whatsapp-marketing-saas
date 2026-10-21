@@ -28,6 +28,7 @@ import { decryptCredential } from '../../utils/crypto.js';
 import { AppError } from '../../utils/errors.js';
 import { ErrorCode } from '@whatsapp-saas/contracts';
 import { logger } from '../../utils/logger.js';
+import { BillingService } from '../billing/billing.service.js';
 
 export class CampaignService {
   private adapter: WhatsAppAdapter;
@@ -52,6 +53,9 @@ export class CampaignService {
     workspaceId: string,
     req: CreateCampaignRequest
   ): Promise<CampaignDto> {
+    // 0. Subscription / trial gate (server-side; the UI is only a convenience)
+    await BillingService.assertDispatchAllowed(workspaceId);
+
     // 1. Verify template exists and is approved
     const template = await TemplateRepository.findById(workspaceId, req.templateId);
     if (!template) {
@@ -158,6 +162,8 @@ export class CampaignService {
       );
     }
 
+    await BillingService.assertDispatchAllowed(workspaceId);
+
     // 1. Mark campaign as running
     await CampaignRepository.updateStatus(workspaceId, campaignId, CampaignStatus.RUNNING);
 
@@ -192,6 +198,15 @@ export class CampaignService {
     const pendingRecipients = await CampaignRepository.getPendingRecipients(campaignId, 1000);
 
     for (const recipient of pendingRecipients) {
+      // Re-check entitlement before every message: trial expiry or suspension mid-campaign
+      // stops dispatch immediately and leaves remaining recipients queued/resumable.
+      const access = await BillingService.checkDispatchAccess(workspaceId);
+      if (!access.allowed) {
+        logger.warn({ campaignId, reason: access.reason }, 'Dispatch halted by subscription policy');
+        const paused = await CampaignRepository.updateStatus(workspaceId, campaignId, CampaignStatus.PAUSED);
+        return this.toDto(paused!);
+      }
+
       // Immediate consent check before sending: verify contact is still opted-in and not suppressed
       const contact = await ContactModel.findOne({
         _id: recipient.contactId,

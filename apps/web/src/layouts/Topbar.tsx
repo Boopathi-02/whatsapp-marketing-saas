@@ -25,6 +25,8 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CheckIcon from '@mui/icons-material/Check';
 import BusinessIcon from '@mui/icons-material/Business';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useThemeMode } from '../hooks/useThemeMode.js';
 import { useApiHealth } from '../hooks/useApiHealth.js';
@@ -313,16 +315,42 @@ export const Topbar: React.FC<TopbarProps> = ({ onMobileDrawerToggle }) => {
             <Divider />
 
             <MenuItem
+              id="menu-item-settings"
+              onClick={() => {
+                handleCloseProfile();
+                navigate('/settings?tab=general');
+              }}
+            >
+              <ListItemIcon>
+                <SettingsOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              Workspace Settings
+            </MenuItem>
+
+            <MenuItem
               id="menu-item-team"
               onClick={() => {
                 handleCloseProfile();
-                navigate('/team');
+                navigate('/settings?tab=team');
               }}
             >
               <ListItemIcon>
                 <GroupOutlinedIcon fontSize="small" />
               </ListItemIcon>
               Team & Members
+            </MenuItem>
+
+            <MenuItem
+              id="menu-item-billing"
+              onClick={() => {
+                handleCloseProfile();
+                navigate('/settings?tab=billing');
+              }}
+            >
+              <ListItemIcon>
+                <CreditCardOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              Subscription & Billing
             </MenuItem>
 
             <Divider />

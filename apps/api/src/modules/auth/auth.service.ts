@@ -19,6 +19,7 @@ import {
   AuthUserDto,
 } from '@whatsapp-saas/contracts';
 import { logger } from '../../utils/logger.js';
+import { BillingService } from '../billing/billing.service.js';
 
 export class AuthService {
   /**
@@ -96,6 +97,7 @@ export class AuthService {
       slug: workspaceSlug,
       ownerId: userId,
     });
+    await BillingService.startTrialSafely(workspace._id.toString());
 
     // Create session & refresh token
     const rawRefreshToken = SecurityUtil.generateRandomToken(40);

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from '../layouts/Sidebar.js';
 import { ThemeModeProvider } from '../hooks/useThemeMode.js';
@@ -47,4 +47,45 @@ describe('Sidebar Navigation Component', () => {
 
     expect(screen.getAllByLabelText('Pingza Home').length).toBeGreaterThan(0);
   });
+
+  it('should trigger onOpenSettings when Settings rail icon is clicked', () => {
+    const handleOpenSettings = vi.fn();
+    render(
+      <MemoryRouter initialEntries={['/contacts']}>
+        <ThemeModeProvider>
+          <Sidebar
+            mobileOpen={false}
+            onMobileClose={() => {}}
+            secondaryCollapsed={true}
+            onOpenSettings={handleOpenSettings}
+          />
+        </ThemeModeProvider>
+      </MemoryRouter>
+    );
+
+    const settingsBtn = screen.getAllByLabelText('Settings')[0];
+    fireEvent.click(settingsBtn);
+    expect(handleOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('should trigger onOtherItemClick when non-settings rail icon is clicked', () => {
+    const handleOtherItemClick = vi.fn();
+    render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <ThemeModeProvider>
+          <Sidebar
+            mobileOpen={false}
+            onMobileClose={() => {}}
+            secondaryCollapsed={false}
+            onOtherItemClick={handleOtherItemClick}
+          />
+        </ThemeModeProvider>
+      </MemoryRouter>
+    );
+
+    const contactsBtn = screen.getAllByLabelText('Contacts')[0];
+    fireEvent.click(contactsBtn);
+    expect(handleOtherItemClick).toHaveBeenCalledTimes(1);
+  });
 });
+

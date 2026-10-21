@@ -28,6 +28,9 @@ interface BusinessProfileDialogProps {
   onSuccess?: () => void;
 }
 
+// The API accepts base64 JSON up to ~1.8M characters, which is about 1.35 MB of image bytes.
+const MAX_PICTURE_BYTES = 1_300_000;
+
 const VERTICAL_OPTIONS = [
   { value: 'UNDEFINED', label: 'Not Specified' },
   { value: 'OTHER', label: 'Other' },
@@ -70,6 +73,29 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({
   const [website1, setWebsite1] = useState('');
   const [website2, setWebsite2] = useState('');
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | undefined>(undefined);
+  const [picture, setPicture] = useState<{ data: string; mimeType: 'image/jpeg' | 'image/png'; previewUrl: string } | null>(null);
+
+  const handlePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
+      setError('Profile picture must be a JPEG or PNG image.');
+      return;
+    }
+    if (file.size > MAX_PICTURE_BYTES) {
+      setError('Profile picture must be 1.3 MB or smaller.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      setError(null);
+      setPicture({ data: url.slice(url.indexOf(',') + 1), mimeType: file.type as 'image/jpeg' | 'image/png', previewUrl: url });
+    };
+    reader.onerror = () => setError('Could not read the selected image.');
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (open && account && workspaceId) {
@@ -88,6 +114,7 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({
     setWebsite1('');
     setWebsite2('');
     setProfilePictureUrl(undefined);
+    setPicture(null);
     setError(null);
     setSuccessMsg(null);
   };
@@ -143,6 +170,7 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({
           email: email.trim() || undefined,
           vertical: vertical !== 'UNDEFINED' ? vertical : undefined,
           websites: websites.length > 0 ? websites : undefined,
+          profilePicture: picture ? { data: picture.data, mimeType: picture.mimeType } : undefined,
         }
       );
 
@@ -195,7 +223,7 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({
               {/* Profile Header info */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                 <Avatar
-                  src={profilePictureUrl}
+                  src={picture?.previewUrl ?? profilePictureUrl}
                   sx={{ width: 64, height: 64, bgcolor: 'primary.light', fontSize: '1.5rem' }}
                 >
                   {account?.displayName ? account.displayName.charAt(0).toUpperCase() : 'W'}
@@ -209,6 +237,21 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                     Official Meta Cloud API Profile
+                  </Typography>
+                </Box>
+                <Box sx={{ ml: 'auto' }}>
+                  <Button component="label" size="small" variant="outlined" disabled={saving}>
+                    {picture ? 'Choose another picture' : 'Change picture'}
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      aria-label="Profile picture file"
+                      onChange={handlePictureChange}
+                    />
+                  </Button>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                    JPEG or PNG, up to 1.3 MB
                   </Typography>
                 </Box>
               </Box>

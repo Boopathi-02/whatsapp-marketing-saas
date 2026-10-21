@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { ConversationModel, IConversation } from '../models/conversation.model.js';
 import { MessageModel, IMessage } from '../models/message.model.js';
-import { MessageStatus } from '@whatsapp-saas/domain';
+import { MessageStatus, messageStatusesBefore } from '@whatsapp-saas/domain';
 
 export interface ListConversationsOptions {
   page: number;
@@ -97,6 +97,7 @@ export class ConversationRepository {
     status?: MessageStatus;
     metaMessageId?: string;
     timestamp?: Date;
+    metadata?: Record<string, unknown>;
   }): Promise<IMessage> {
     const workspaceObjectId = new Types.ObjectId(data.workspaceId);
     const conversationObjectId = new Types.ObjectId(data.conversationId);
@@ -114,6 +115,7 @@ export class ConversationRepository {
       status: data.status || (data.direction === 'inbound' ? MessageStatus.DELIVERED : MessageStatus.ACCEPTED),
       metaMessageId: data.metaMessageId,
       timestamp: ts,
+      metadata: data.metadata ?? {},
     });
 
     // Update conversation lastMessage & unread count if inbound
@@ -172,14 +174,48 @@ export class ConversationRepository {
     );
   }
 
+  /**
+   * Advances a message status atomically. Returns null when the message is unknown or the
+   * transition would move backwards (late / duplicate webhook).
+   */
   static async updateMessageStatus(
     metaMessageId: string,
-    status: MessageStatus
+    status: MessageStatus,
+    error?: { code?: number; message?: string } | null,
+    workspaceId?: string | null
   ): Promise<IMessage | null> {
+    const set: Record<string, unknown> = { status };
+    if (status === MessageStatus.FAILED && error) set['metadata.error'] = error;
     return MessageModel.findOneAndUpdate(
-      { metaMessageId },
-      { $set: { status } },
+      {
+        metaMessageId,
+        ...(workspaceId ? { workspaceId: new Types.ObjectId(workspaceId) } : {}),
+        status: { $in: messageStatusesBefore(status) },
+      },
+      { $set: set },
       { new: true }
     );
+  }
+
+  /**
+   * Records (or, with an empty emoji, removes) a customer's reaction on one of this
+   * workspace's messages. Keyed by sender so a customer has at most one reaction per message.
+   */
+  static async setReaction(
+    workspaceId: string,
+    targetMetaMessageId: string,
+    fromDigits: string,
+    emoji: string | null
+  ): Promise<boolean> {
+    const path = `metadata.reactions.${fromDigits.replace(/\D/g, '')}`;
+    const res = await MessageModel.updateOne(
+      { workspaceId: new Types.ObjectId(workspaceId), metaMessageId: targetMetaMessageId },
+      emoji ? { $set: { [path]: emoji } } : { $unset: { [path]: '' } }
+    );
+    return res.matchedCount > 0;
+  }
+
+  static async findMessageByMetaId(workspaceId: string, metaMessageId: string): Promise<IMessage | null> {
+    return MessageModel.findOne({ workspaceId: new Types.ObjectId(workspaceId), metaMessageId });
   }
 }

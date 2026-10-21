@@ -130,13 +130,82 @@ export const BusinessProfileDtoSchema = z.object({
 
 export type BusinessProfileDto = z.infer<typeof BusinessProfileDtoSchema>;
 
+export const BUSINESS_VERTICALS = [
+  'ALCOHOL', 'APPAREL', 'AUTO', 'BEAUTY', 'EDU', 'ENTERTAIN', 'EVENT_PLAN', 'FINANCE', 'GOVT',
+  'GROCERY', 'HEALTH', 'HOTEL', 'NONPROFIT', 'ONLINE_GAMBLING', 'OTC_DRUGS', 'OTHER',
+  'PHYSICAL_GAMBLING', 'PROF_SERVICES', 'RESTAURANT', 'RETAIL', 'TRAVEL',
+] as const;
+
+/** Meta accepts JPEG/PNG profile pictures; the API body limit keeps uploads small (base64 in JSON). */
+export const PROFILE_PICTURE_MAX_BASE64_CHARS = 1_800_000;
+
 export const UpdateBusinessProfileSchema = z.object({
   about: z.string().trim().max(139).optional(),
   address: z.string().trim().max(256).optional(),
   description: z.string().trim().max(512).optional(),
   email: z.string().trim().email().optional().or(z.literal('')),
-  websites: z.array(z.string().trim().url()).max(2).optional(),
-  vertical: z.string().trim().optional(),
+  websites: z
+    .array(z.string().trim().url().max(256).refine(u => /^https?:\/\//i.test(u), 'Websites must use http or https'))
+    .max(2)
+    .optional(),
+  vertical: z.enum(BUSINESS_VERTICALS).optional(),
+  profilePicture: z
+    .object({
+      data: z.string().min(1).max(PROFILE_PICTURE_MAX_BASE64_CHARS).regex(/^[A-Za-z0-9+/]+=*$/, 'Invalid base64 data'),
+      mimeType: z.enum(['image/jpeg', 'image/png']),
+    })
+    .optional(),
 });
 
 export type UpdateBusinessProfileRequest = z.infer<typeof UpdateBusinessProfileSchema>;
+
+export interface WabaPhoneNumberDto {
+  id: string;
+  displayPhoneNumber: string | null;
+  verifiedName: string | null;
+  qualityRating: string;
+  nameStatus: string | null;
+  codeVerificationStatus: string | null;
+  platformType: string | null;
+  /** True when this phone number is already connected in this workspace. */
+  connected: boolean;
+  /** True when it is connected as an active account in a different workspace. */
+  unavailable: boolean;
+}
+
+export const AddPhoneNumberSchema = z.object({
+  phoneNumberId: z.string().trim().min(1, 'Phone Number ID is required'),
+});
+export type AddPhoneNumberRequest = z.infer<typeof AddPhoneNumberSchema>;
+
+export const BlockUsersSchema = z.object({
+  // Digits with optional leading '+'; normalised to digits-only (WhatsApp ID format).
+  users: z
+    .array(z.string().trim().regex(/^\+?[1-9]\d{6,14}$/, 'Enter phone numbers in international format'))
+    .min(1)
+    .max(25),
+});
+export type BlockUsersRequest = z.infer<typeof BlockUsersSchema>;
+
+export const ListBlockedUsersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  after: z.string().max(500).optional(),
+  before: z.string().max(500).optional(),
+});
+export type ListBlockedUsersQuery = z.infer<typeof ListBlockedUsersQuerySchema>;
+
+export interface BlockedUserDto {
+  waId: string;
+  name: string | null;
+}
+
+export interface BlockedUsersPageDto {
+  items: BlockedUserDto[];
+  after: string | null;
+  before: string | null;
+}
+
+export interface BlockUsersResultDto {
+  changed: string[];
+  failed: Array<{ input: string; message: string }>;
+}

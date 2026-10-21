@@ -1,6 +1,8 @@
 services:
   mongodb:
     image: mongo:7.0
+    # Single-node replica set: required for multi-document transactions (wallet/ledger).
+    command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
     container_name: wa-saas-mongodb
     restart: unless-stopped
     ports:
@@ -13,7 +15,14 @@ services:
     networks:
       - wa-network
     healthcheck:
-      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      test:
+        [
+          'CMD',
+          'mongosh',
+          '--quiet',
+          '--eval',
+          "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

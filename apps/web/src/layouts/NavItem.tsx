@@ -43,7 +43,7 @@ export const NavItem: React.FC<NavItemProps> = ({
           backgroundColor: theme =>
             theme.palette.mode === 'dark' ? 'rgba(20, 184, 166, 0.15)' : 'rgba(20, 184, 166, 0.1)',
           color: 'primary.main',
-          fontWeight: 600,
+          fontWeight: 500,
           '& .MuiListItemIcon-root': {
             color: 'primary.main',
           },

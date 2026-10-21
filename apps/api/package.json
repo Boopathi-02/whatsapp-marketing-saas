@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@whatsapp-saas/billing": "workspace:*",
     "@whatsapp-saas/contracts": "workspace:*",
     "@whatsapp-saas/database": "workspace:*",
     "@whatsapp-saas/domain": "workspace:*",

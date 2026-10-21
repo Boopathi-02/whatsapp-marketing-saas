@@ -6,22 +6,56 @@ import {
   CampaignRepository,
   ContactRepository,
   IWebhookEvent,
+  IWhatsAppAccount,
 } from '@whatsapp-saas/database';
 import {
   MetaWhatsAppCloudAdapter,
   WhatsAppAdapter,
   MockWhatsAppAdapter,
 } from '@whatsapp-saas/whatsapp-adapter';
-import { MessageStatus, ContactOptInStatus } from '@whatsapp-saas/domain';
+import { MessageStatus, ContactOptInStatus, WhatsAppAccountStatus } from '@whatsapp-saas/domain';
 import { env } from '../../config/env.js';
 import { AppError } from '../../utils/errors.js';
 import { ErrorCode } from '@whatsapp-saas/contracts';
 import { logger } from '../../utils/logger.js';
+import {
+  parseInboundMessage,
+  describeStatusError,
+  MetaInboundMessage,
+  MetaStatusError,
+} from './inbound-message.js';
 
 export interface WebhookIngestionResult {
   persisted: boolean;
   isDuplicate: boolean;
   event: IWebhookEvent;
+}
+
+interface MetaChange {
+  field?: string;
+  value?: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+interface MetaEntry {
+  id?: string;
+  changes?: MetaChange[];
+}
+
+const digits = (v: unknown): string => String(v ?? '').replace(/\D/g, '');
+
+/** Stable identifiers of every deliverable item in a payload (messages and statuses). */
+function collectItemIds(entries: MetaEntry[]): string[] {
+  const ids: string[] = [];
+  for (const entry of entries) {
+    for (const change of entry.changes ?? []) {
+      const val = change.value;
+      if (!val) continue;
+      for (const m of Array.isArray(val.messages) ? val.messages : []) if (m?.id) ids.push(String(m.id));
+      for (const s of Array.isArray(val.statuses) ? val.statuses : []) {
+        if (s?.id) ids.push(`${s.id}_${s.status ?? 'status'}${s.timestamp ? `_${s.timestamp}` : ''}`);
+      }
+    }
+  }
+  return ids;
 }
 
 export class WebhookService {
@@ -61,84 +95,55 @@ export class WebhookService {
     signatureHeader: string | undefined,
     payload: Record<string, unknown>
   ): Promise<WebhookIngestionResult> {
-    // 1. Validate payload and signature header
     if (!rawBody) {
       throw new AppError('Missing raw request body for signature verification', 400, ErrorCode.BAD_REQUEST);
     }
-
     if (!signatureHeader) {
       throw new AppError('Missing X-Hub-Signature-256 header', 401, ErrorCode.UNAUTHORIZED);
     }
 
-    // 2. Cryptographic signature check
-    const isValidSignature = this.adapter.verifyWebhookSignature(
-      rawBody,
-      signatureHeader,
-      env.META_APP_SECRET
-    );
-
+    const isValidSignature = this.adapter.verifyWebhookSignature(rawBody, signatureHeader, env.META_APP_SECRET);
     if (!isValidSignature) {
-      logger.warn({ signatureHeader }, 'Rejected webhook request with invalid signature');
+      logger.warn('Rejected webhook request with invalid signature');
       throw new AppError('Invalid webhook cryptographic signature', 401, ErrorCode.UNAUTHORIZED);
     }
 
-    // 3. Extract Meta event identifiers and resolve workspace ownership
-    const entries = Array.isArray(payload.entry) ? payload.entry : [];
-    let phoneNumberId: string | undefined;
-    let wabaId: string | undefined;
-    let providerEventId: string | undefined;
+    const entries = (Array.isArray(payload.entry) ? payload.entry : []) as MetaEntry[];
+
+    // Event type is the first change's field; message/status payloads are normalised.
     let eventType = 'unknown';
-
-    if (entries.length > 0) {
-      const firstEntry = entries[0];
-      wabaId = firstEntry.id;
-
-      if (Array.isArray(firstEntry.changes) && firstEntry.changes.length > 0) {
-        const change = firstEntry.changes[0];
-        eventType = change.field || 'messages';
-        const val = change.value;
-
-        if (val) {
-          phoneNumberId = val.metadata?.phone_number_id;
-
-          // Stable ID extraction from message or status
-          if (Array.isArray(val.messages) && val.messages.length > 0) {
-            providerEventId = val.messages[0].id;
-            eventType = 'messages';
-          } else if (Array.isArray(val.statuses) && val.statuses.length > 0) {
-            const statusObj = val.statuses[0];
-            const statusName = statusObj.status || 'status';
-            const timestamp = statusObj.timestamp ? `_${statusObj.timestamp}` : '';
-            providerEventId = statusObj.id ? `${statusObj.id}_${statusName}${timestamp}` : undefined;
-            eventType = 'statuses';
-          }
-        }
-      }
+    const firstChange = entries[0]?.changes?.[0];
+    if (firstChange) {
+      eventType = firstChange.field || 'messages';
+      if (Array.isArray(firstChange.value?.messages) && firstChange.value.messages.length > 0) eventType = 'messages';
+      else if (Array.isArray(firstChange.value?.statuses) && firstChange.value.statuses.length > 0) eventType = 'statuses';
     }
 
-    // Fallback stable event identifier if neither message nor status ID was present
-    if (!providerEventId) {
+    // Dedup key. One item keeps its natural id; a batch hashes ALL item ids so a payload
+    // whose first message was already seen cannot hide new messages behind it.
+    const itemIds = collectItemIds(entries);
+    let providerEventId: string;
+    if (itemIds.length === 1) {
+      providerEventId = itemIds[0]!;
+    } else if (itemIds.length > 1) {
+      providerEventId = `batch_${crypto.createHash('sha256').update([...itemIds].sort().join('|')).digest('hex').substring(0, 32)}`;
+    } else {
       const rawString = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
       providerEventId = `evt_${crypto.createHash('sha256').update(rawString).digest('hex').substring(0, 32)}`;
     }
 
-    // 4. Resolve workspace ID strictly from verified provider records
-    let resolvedWorkspaceId: string | null = null;
-    if (phoneNumberId) {
-      const account = await WhatsAppAccountRepository.findByPhoneNumberId(phoneNumberId);
-      if (account) {
-        resolvedWorkspaceId = account.workspaceId.toString();
+    // The stored workspace is set only when every change in the payload belongs to one tenant.
+    const owners = new Set<string>();
+    let unresolved = false;
+    for (const entry of entries) {
+      for (const change of entry.changes ?? []) {
+        const account = await this.resolveAccount(entry.id, change.value);
+        if (account) owners.add(account.workspaceId.toString());
+        else unresolved = true;
       }
     }
+    const resolvedWorkspaceId = !unresolved && owners.size === 1 ? [...owners][0]! : null;
 
-    if (!resolvedWorkspaceId && wabaId) {
-      const accounts = await WhatsAppAccountRepository.findByWabaId(wabaId);
-      if (accounts.length > 0) {
-        resolvedWorkspaceId = accounts[0].workspaceId.toString();
-      }
-    }
-
-    // 5. Durably record event before returning acknowledgment (prevents data loss)
     const { event, isDuplicate } = await WebhookEventRepository.recordEvent(
       providerEventId,
       eventType,
@@ -146,126 +151,245 @@ export class WebhookService {
       resolvedWorkspaceId
     );
 
-    // 6. Process message delivery status or inbound message if not duplicate
     if (!isDuplicate) {
-      void this.processWebhookEvent(payload, resolvedWorkspaceId).catch((err) => {
+      void this.processWebhookEvent(payload, event._id.toString()).catch(err => {
         logger.error({ err: String(err) }, 'Failed to process webhook event asynchronously');
       });
     }
 
-    return {
-      persisted: true,
-      isDuplicate,
-      event,
-    };
+    return { persisted: true, isDuplicate, event };
   }
 
   /**
-   * Processes webhook events (status updates and inbound customer messages).
+   * Which of our accounts does this change belong to? The identifiers come from a payload
+   * that passed signature verification, but are still only used to *look up* our own
+   * records - never to select or create tenant data directly.
    */
-  async processWebhookEvent(
-    payload: Record<string, unknown>,
-    workspaceId: string | null
-  ): Promise<void> {
-    const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  private async resolveAccount(wabaId: string | undefined, value: Record<string, any> | undefined): Promise<IWhatsAppAccount | null> { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const phoneNumberId = value?.metadata?.phone_number_id;
+    if (typeof phoneNumberId === 'string' && phoneNumberId) {
+      return WhatsAppAccountRepository.resolveForWebhook(phoneNumberId);
+    }
+    if (wabaId) {
+      const display = digits(value?.display_phone_number ?? value?.phone_number);
+      if (display) {
+        const matches = (await WhatsAppAccountRepository.findByWabaAndDisplayDigits(wabaId, display)).filter(
+          a => a.status !== WhatsAppAccountStatus.DISCONNECTED
+        );
+        if (matches.length === 1) return matches[0]!;
+      }
+      const accounts = (await WhatsAppAccountRepository.findByWabaId(wabaId)).filter(
+        a => a.status !== WhatsAppAccountStatus.DISCONNECTED
+      );
+      // Only unambiguous when every account of the WABA belongs to the same workspace.
+      if (accounts.length > 0 && new Set(accounts.map(a => a.workspaceId.toString())).size === 1) return accounts[0]!;
+    }
+    return null;
+  }
+
+  /**
+   * Processes every change in a payload. Each change is isolated so one bad item cannot
+   * block the rest; the stored event is marked processed or failed accordingly.
+   */
+  async processWebhookEvent(payload: Record<string, unknown>, eventId?: string): Promise<void> {
+    const entries = (Array.isArray(payload.entry) ? payload.entry : []) as MetaEntry[];
+    const errors: string[] = [];
+
     for (const entry of entries) {
-      const changes = Array.isArray(entry.changes) ? entry.changes : [];
-      for (const change of changes) {
-        const val = change.value as {
-          statuses?: Array<{ id: string; status: string; timestamp?: string }>;
-          messages?: Array<{
-            id: string;
-            from: string;
-            type: string;
-            text?: { body?: string };
-            timestamp?: string;
-            [key: string]: unknown;
-          }>;
-          contacts?: Array<{ wa_id: string; profile?: { name?: string } }>;
-        };
-        if (!val) continue;
-
-        // 1. Process delivery / read / failure statuses
-        if (Array.isArray(val.statuses)) {
-          for (const statusObj of val.statuses) {
-            const metaMessageId = statusObj.id;
-            const status = statusObj.status as MessageStatus;
-            if (metaMessageId && status) {
-              await ConversationRepository.updateMessageStatus(metaMessageId, status);
-              const campaignUpdate = await CampaignRepository.updateRecipientByMetaMessageId(
-                metaMessageId,
-                status
-              );
-              if (campaignUpdate) {
-                if (status === MessageStatus.DELIVERED) {
-                  await CampaignRepository.incrementStats(campaignUpdate.campaignId, 'deliveredCount');
-                } else if (status === MessageStatus.READ) {
-                  await CampaignRepository.incrementStats(campaignUpdate.campaignId, 'readCount');
-                } else if (status === MessageStatus.FAILED) {
-                  await CampaignRepository.incrementStats(campaignUpdate.campaignId, 'failedCount');
-                }
-              }
-            }
-          }
+      for (const change of entry.changes ?? []) {
+        try {
+          const account = await this.resolveAccount(entry.id, change.value);
+          await this.handleChange(entry.id, change, account);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.error({ err: message, field: change.field }, 'Webhook change processing failed');
+          errors.push(`${change.field ?? 'unknown'}: ${message}`);
         }
+      }
+    }
 
-        // 2. Process inbound messages
-        if (workspaceId && Array.isArray(val.messages)) {
-          const contacts = Array.isArray(val.contacts) ? val.contacts : [];
-          for (const msg of val.messages) {
-            const senderPhone = msg.from;
-            const contactMeta = contacts.find((c) => c.wa_id === senderPhone);
-            const contactName = contactMeta?.profile?.name;
+    if (eventId) {
+      if (errors.length > 0) await WebhookEventRepository.markFailed(eventId, errors.join('; ').slice(0, 1000));
+      else await WebhookEventRepository.markProcessed(eventId);
+    }
+    if (errors.length > 0) throw new Error(errors.join('; '));
+  }
 
-            // Find or create contact
-            let contact = await ContactRepository.findByPhone(workspaceId, senderPhone);
-            if (!contact) {
-              contact = await ContactRepository.createContact({
-                workspaceId,
-                phoneNumber: senderPhone,
-                displayName: contactName,
-                source: 'webhook',
-                consentStatus: ContactOptInStatus.OPTED_IN,
-              });
-            }
+  private async handleChange(
+    wabaId: string | undefined,
+    change: MetaChange,
+    account: IWhatsAppAccount | null
+  ): Promise<void> {
+    const val = change.value;
+    if (!val) return;
 
-            // Find or create conversation
-            const conversation = await ConversationRepository.findOrCreateConversation(
-              workspaceId,
-              contact._id.toString(),
-              senderPhone,
-              contactName
-            );
+    switch (change.field) {
+      case 'messages':
+        await this.handleMessages(val, account);
+        return;
+      case 'phone_number_name_update':
+        await this.handleNameUpdate(val, account);
+        return;
+      case 'phone_number_quality_update':
+        await this.handleQualityUpdate(val, account);
+        return;
+      case 'account_update':
+        await this.handleAccountUpdate(wabaId, val, account);
+        return;
+      default:
+        logger.debug({ field: change.field }, 'Ignoring unhandled webhook field');
+    }
+  }
 
-            // Extract message body / media
-            let content = '';
-            let mediaUrl: string | undefined = undefined;
-            const msgType = msg.type || 'text';
+  // --- account-level events ---------------------------------------------------
 
-            if (msg.text?.body) {
-              content = msg.text.body;
-            } else if (msg[msgType] && typeof msg[msgType] === 'object') {
-              const mediaObj = msg[msgType] as { caption?: string; link?: string };
-              content = mediaObj.caption || `[${msgType.toUpperCase()}]`;
-              mediaUrl = mediaObj.link;
-            } else {
-              content = `[${msgType.toUpperCase()}]`;
-            }
+  /** Display-name review result. Only an APPROVED decision changes what we show. */
+  private async handleNameUpdate(val: Record<string, any>, account: IWhatsAppAccount | null): Promise<void> { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!account) return;
+    const fields: Record<string, unknown> = { 'metadata.nameStatus': val.decision };
+    if (val.decision === 'APPROVED' && typeof val.requested_verified_name === 'string' && val.requested_verified_name) {
+      fields.displayName = val.requested_verified_name;
+    }
+    if (val.rejection_reason) fields['metadata.nameRejectionReason'] = val.rejection_reason;
+    await WhatsAppAccountRepository.patchFields(account._id.toString(), fields);
+  }
 
-            await ConversationRepository.addMessage({
-              workspaceId,
-              conversationId: conversation._id.toString(),
-              contactId: contact._id.toString(),
-              direction: 'inbound',
-              type: msgType,
-              content,
-              mediaUrl,
-              metaMessageId: msg.id,
-              timestamp: msg.timestamp ? new Date(parseInt(msg.timestamp, 10) * 1000) : new Date(),
+  /** Messaging-limit tier changes (upgrade / downgrade / onboarding). */
+  private async handleQualityUpdate(val: Record<string, any>, account: IWhatsAppAccount | null): Promise<void> { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (!account) return;
+    const fields: Record<string, unknown> = {
+      'metadata.lastQualityEvent': { event: val.event, at: new Date().toISOString() },
+    };
+    if (typeof val.current_limit === 'string') fields['metadata.messagingLimit'] = val.current_limit;
+    await WhatsAppAccountRepository.patchFields(account._id.toString(), fields);
+  }
+
+  private async handleAccountUpdate(
+    wabaId: string | undefined,
+    val: Record<string, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
+    account: IWhatsAppAccount | null
+  ): Promise<void> {
+    const event = String(val.event ?? '');
+    switch (event) {
+      case 'VERIFIED_ACCOUNT':
+        if (account) await WhatsAppAccountRepository.patchFields(account._id.toString(), { 'metadata.businessVerification': 'VERIFIED' });
+        return;
+      case 'PARTNER_APP_INSTALLED':
+        // The customer authorised our app. The account itself is created by our own
+        // Embedded Signup completion (which holds the token); nothing is created from a webhook.
+        logger.info({ wabaId: val.waba_info?.waba_id ?? wabaId }, 'Partner app installed on WABA');
+        return;
+      case 'PARTNER_REMOVED':
+      case 'ACCOUNT_DELETED': {
+        // Our access is gone: mark every affected account of this WABA disconnected.
+        if (!wabaId) return;
+        for (const a of await WhatsAppAccountRepository.findByWabaId(wabaId)) {
+          if (a.status !== WhatsAppAccountStatus.DISCONNECTED) {
+            await WhatsAppAccountRepository.patchFields(a._id.toString(), {
+              status: WhatsAppAccountStatus.DISCONNECTED,
+              'metadata.disconnectedBy': event,
             });
           }
         }
+        return;
       }
+      default:
+        if (account && event) {
+          await WhatsAppAccountRepository.patchFields(account._id.toString(), {
+            'metadata.lastAccountEvent': { event, at: new Date().toISOString() },
+          });
+        }
+    }
+  }
+
+  // --- messages and statuses ----------------------------------------------------
+
+  private async handleMessages(val: Record<string, any>, account: IWhatsAppAccount | null): Promise<void> { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const workspaceId = account ? account.workspaceId.toString() : null;
+
+    // 1. Delivery / read / failure statuses (forward-only, scoped to the owning workspace)
+    for (const statusObj of Array.isArray(val.statuses) ? val.statuses : []) {
+      const metaMessageId: string | undefined = statusObj?.id;
+      const status = statusObj?.status as MessageStatus | undefined;
+      if (!metaMessageId || !status) continue;
+
+      const error = status === MessageStatus.FAILED ? describeStatusError(statusObj.errors as MetaStatusError[]) : null;
+      const updated = await ConversationRepository.updateMessageStatus(metaMessageId, status, error, workspaceId);
+      const campaignUpdate = await CampaignRepository.updateRecipientByMetaMessageId(
+        metaMessageId,
+        status,
+        error?.message,
+        workspaceId
+      );
+      if (campaignUpdate) {
+        if (status === MessageStatus.DELIVERED) await CampaignRepository.incrementStats(campaignUpdate.campaignId, 'deliveredCount');
+        else if (status === MessageStatus.READ) await CampaignRepository.incrementStats(campaignUpdate.campaignId, 'readCount');
+        else if (status === MessageStatus.FAILED) await CampaignRepository.incrementStats(campaignUpdate.campaignId, 'failedCount');
+      }
+      if (!updated && !campaignUpdate) {
+        logger.debug({ metaMessageId, status }, 'Status update ignored (unknown message or not a forward transition)');
+      }
+    }
+
+    // 2. Inbound customer messages
+    const inbound = Array.isArray(val.messages) ? (val.messages as MetaInboundMessage[]) : [];
+    if (inbound.length === 0) return;
+    if (!workspaceId) {
+      logger.warn({ phoneNumberId: val.metadata?.phone_number_id }, 'Inbound message for unknown or disconnected account ignored');
+      return;
+    }
+
+    const contacts = Array.isArray(val.contacts) ? (val.contacts as Array<{ wa_id: string; profile?: { name?: string } }>) : [];
+    for (const msg of inbound) {
+      if (!msg?.id || !msg.from) continue;
+
+      // Idempotent against redelivery of an already-stored message
+      if (await ConversationRepository.findMessageByMetaId(workspaceId, msg.id)) continue;
+
+      const parsed = parseInboundMessage(msg);
+      if (parsed.reaction) {
+        await ConversationRepository.setReaction(
+          workspaceId,
+          parsed.reaction.targetMetaMessageId,
+          msg.from,
+          parsed.reaction.emoji
+        );
+        continue;
+      }
+
+      // Store phones as E.164 so inbound traffic matches contacts created elsewhere.
+      const senderPhone = `+${digits(msg.from)}`;
+      const contactName = contacts.find(c => digits(c.wa_id) === digits(msg.from))?.profile?.name;
+
+      let contact = await ContactRepository.findByPhone(workspaceId, senderPhone);
+      if (!contact) {
+        contact = await ContactRepository.createContact({
+          workspaceId,
+          phoneNumber: senderPhone,
+          displayName: contactName,
+          source: 'webhook',
+          consentStatus: ContactOptInStatus.OPTED_IN,
+        });
+      }
+
+      const conversation = await ConversationRepository.findOrCreateConversation(
+        workspaceId,
+        contact._id.toString(),
+        senderPhone,
+        contactName
+      );
+
+      await ConversationRepository.addMessage({
+        workspaceId,
+        conversationId: conversation._id.toString(),
+        contactId: contact._id.toString(),
+        direction: 'inbound',
+        type: parsed.type,
+        content: parsed.content,
+        metaMessageId: msg.id,
+        timestamp: msg.timestamp ? new Date(parseInt(msg.timestamp, 10) * 1000) : new Date(),
+        metadata: parsed.metadata,
+      });
     }
   }
 }

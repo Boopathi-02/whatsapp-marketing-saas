@@ -6,6 +6,11 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     fileParallelism: false,
+    env: {
+      PAYMENT_PROVIDER: 'test',
+      PAYMENT_WEBHOOK_SECRET: 'test-payment-webhook-secret-0123456789',
+      WALLET_DEFAULT_CURRENCY: 'USD',
+    },
     testTimeout: 20000,
     hookTimeout: 20000,
     alias: {

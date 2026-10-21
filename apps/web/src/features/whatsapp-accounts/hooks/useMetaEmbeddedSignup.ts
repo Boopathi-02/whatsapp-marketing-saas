@@ -11,12 +11,15 @@ export interface UseMetaEmbeddedSignupProps {
   workspaceId?: string;
   onSuccess?: (account: WhatsAppAccountDto) => void;
   onError?: (error: string) => void;
+  /** How long to wait for Meta's FINISH message (waba/phone ids) after the auth code arrives. */
+  idsWaitMs?: number;
 }
 
 export function useMetaEmbeddedSignup({
   workspaceId,
   onSuccess,
   onError,
+  idsWaitMs = 0,
 }: UseMetaEmbeddedSignupProps) {
   const [status, setStatus] = useState<EmbeddedSignupStatus>('NOT_CONNECTED');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -200,6 +203,16 @@ export function useMetaEmbeddedSignup({
 
         try {
           if (response.authResponse?.code) {
+            // Meta delivers the WA_EMBEDDED_SIGNUP FINISH message (waba_id / phone_number_id)
+            // separately from the FB.login callback and the order is not guaranteed.
+            // Give the message a short window to arrive before exchanging the code.
+            const deadline = Date.now() + idsWaitMs;
+            while (
+              (!capturedIdsRef.current.wabaId || !capturedIdsRef.current.phoneNumberId) &&
+              Date.now() < deadline
+            ) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
             setConnectingStep('Exchanging authorization code and configuring Meta webhooks...');
 
             const connectedAccount = await api.post<WhatsAppAccountDto>(
@@ -257,7 +270,7 @@ export function useMetaEmbeddedSignup({
       setErrorMessage(msg);
       onError?.(msg);
     }
-  }, [workspaceId, fetchSessionAndConfig, loadFacebookSdk, onSuccess, onError]);
+  }, [workspaceId, fetchSessionAndConfig, loadFacebookSdk, onSuccess, onError, idsWaitMs]);
 
   const resetStatus = useCallback(() => {
     isExchangingRef.current = false;

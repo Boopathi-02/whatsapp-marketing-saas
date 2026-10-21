@@ -70,6 +70,23 @@ export const MessageStatus = {
 } as const;
 export type MessageStatus = (typeof MessageStatus)[keyof typeof MessageStatus];
 
+const MESSAGE_STATUS_RANK: Record<string, number> = { accepted: 0, queued: 1, sent: 2, delivered: 3, read: 4 };
+
+/**
+ * Message statuses only move forward. Webhooks can arrive late or out of order, so a late
+ * 'sent' must never overwrite 'read'. 'failed' is terminal and can only follow pre-delivery states.
+ */
+export function canAdvanceMessageStatus(from: MessageStatus, to: MessageStatus): boolean {
+  if (from === to || from === 'failed') return false;
+  if (to === 'failed') return from !== 'delivered' && from !== 'read';
+  return MESSAGE_STATUS_RANK[to]! > MESSAGE_STATUS_RANK[from]!;
+}
+
+/** All current statuses from which a transition to `to` is allowed (for atomic conditional updates). */
+export function messageStatusesBefore(to: MessageStatus): MessageStatus[] {
+  return (Object.values(MessageStatus) as MessageStatus[]).filter(s => canAdvanceMessageStatus(s, to));
+}
+
 export const SubscriptionTier = {
   FREE_TRIAL: 'free_trial',
   STARTER: 'starter',

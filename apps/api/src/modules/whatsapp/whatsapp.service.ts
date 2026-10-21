@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import {
   WhatsAppAccountRepository,
   OnboardingSessionRepository,
@@ -25,6 +26,7 @@ import { encryptCredential, decryptCredential } from '../../utils/crypto.js';
 import { AppError } from '../../utils/errors.js';
 import { ErrorCode } from '@whatsapp-saas/contracts';
 import { logger } from '../../utils/logger.js';
+import { whatsAppChannelService } from './whatsapp-channel.service.js';
 
 export class WhatsAppService {
   private adapter: WhatsAppAdapter;
@@ -227,18 +229,33 @@ export class WhatsAppService {
     const phoneNumberId = req.phoneNumberId?.trim();
 
     // If wabaId was not supplied by client event, extract from granular scopes if present
+    // Only WhatsApp scopes target WABAs; other scopes (e.g. business_management) target
+    // business ids, which must never be mistaken for a WABA id.
     if (!wabaId && debugResult.granularScopes) {
-      for (const g of debugResult.granularScopes) {
-        if (g.targetIds && g.targetIds.length > 0) {
-          wabaId = g.targetIds[0];
+      for (const scope of ['whatsapp_business_management', 'whatsapp_business_messaging']) {
+        const g = debugResult.granularScopes.find(s => s.scope === scope && s.targetIds?.length);
+        if (g) {
+          wabaId = g.targetIds![0];
           break;
         }
       }
     }
 
     if (!wabaId) {
+      logger.warn(
+        {
+          workspaceId,
+          clientSentWabaId: Boolean(req.wabaId),
+          clientSentPhoneNumberId: Boolean(req.phoneNumberId),
+          grantedScopes: debugResult.granularScopes?.map(s => ({
+            scope: s.scope,
+            targets: s.targetIds?.length ?? 0,
+          })),
+        },
+        'Embedded Signup completed without a resolvable WABA id'
+      );
       throw new AppError(
-        'WhatsApp Business Account ID was not found or provided during signup.',
+        'WhatsApp Business Account ID was not found or provided during signup. Please retry and complete every step in the Meta popup until it closes.',
         400,
         ErrorCode.BAD_REQUEST
       );
@@ -303,8 +320,12 @@ export class WhatsAppService {
     }
 
     // 7. Register phone number on Meta Cloud API
+    // A random per-account PIN (stored encrypted) replaces a shared default.
+    const registrationPin = String(crypto.randomInt(100000, 1000000));
+    let registrationPinEncrypted: string | undefined;
     try {
-      await this.adapter.registerPhoneNumber(phoneNumberId, accessToken);
+      await this.adapter.registerPhoneNumber(phoneNumberId, accessToken, registrationPin);
+      registrationPinEncrypted = encryptCredential(registrationPin);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       logger.warn({ err: message, phoneNumberId }, 'Notice: Phone number registration status');
@@ -328,6 +349,7 @@ export class WhatsAppService {
         wabaDetails,
         phoneDetails,
         tokenExpiresIn: tokenResult.expiresIn,
+        ...(registrationPinEncrypted ? { registrationPinEncrypted } : {}),
       },
     });
 
@@ -479,15 +501,10 @@ export class WhatsAppService {
   async updateBusinessProfile(
     workspaceId: string,
     accountId: string,
-    profileData: UpdateBusinessProfileRequest
-  ): Promise<{ success: boolean }> {
-    const account = await WhatsAppAccountRepository.findById(workspaceId, accountId);
-    if (!account) {
-      throw new AppError('WhatsApp account not found in this workspace.', 404, ErrorCode.NOT_FOUND);
-    }
-
-    const accessToken = decryptCredential(account.accessTokenEncrypted);
-    return this.adapter.updateBusinessProfile(account.phoneNumberId, accessToken, profileData);
+    profileData: UpdateBusinessProfileRequest,
+    actorUserId?: string
+  ): Promise<{ success: boolean; profilePictureUpdated: boolean }> {
+    return whatsAppChannelService.updateBusinessProfile(workspaceId, accountId, profileData, actorUserId);
   }
 
   /**

@@ -159,7 +159,35 @@ export interface BusinessProfileResult {
   vertical?: string;
 }
 
+export interface WabaPhoneNumber {
+  id: string;
+  verifiedName?: string;
+  displayPhoneNumber?: string;
+  qualityRating: QualityRating;
+  nameStatus?: string;
+  codeVerificationStatus?: string;
+  platformType?: string;
+  throughputLevel?: string;
+}
+
+export interface BlockedUser {
+  waId: string;
+  input?: string;
+}
+
+export interface BlockedUsersPage {
+  items: BlockedUser[];
+  after?: string;
+  before?: string;
+}
+
+export interface BlockUsersResult {
+  added: BlockedUser[];
+  failed: Array<{ input: string; message: string }>;
+}
+
 export interface UpdateBusinessProfileParams {
+  profilePictureHandle?: string;
   about?: string;
   address?: string;
   description?: string;
@@ -188,6 +216,20 @@ export interface WhatsAppAdapter {
   debugToken(inputToken: string, appAccessToken: string): Promise<DebugTokenResult>;
   subscribeWabaWebhooks(wabaId: string, accessToken: string): Promise<SubscribeWebhooksResult>;
   registerPhoneNumber(phoneNumberId: string, accessToken: string, pin?: string): Promise<RegisterPhoneNumberResult>;
+  listPhoneNumbers(wabaId: string, accessToken: string): Promise<WabaPhoneNumber[]>;
+  /** Uploads an image via the resumable upload API and returns the handle for profile_picture_handle. */
+  uploadProfilePicture(
+    appId: string,
+    accessToken: string,
+    file: { data: Buffer; mimeType: string; fileName: string }
+  ): Promise<{ handle: string }>;
+  listBlockedUsers(
+    phoneNumberId: string,
+    accessToken: string,
+    page?: { limit?: number; after?: string; before?: string }
+  ): Promise<BlockedUsersPage>;
+  blockUsers(phoneNumberId: string, accessToken: string, users: string[]): Promise<BlockUsersResult>;
+  unblockUsers(phoneNumberId: string, accessToken: string, users: string[]): Promise<BlockUsersResult>;
 }
 
 /**
@@ -660,6 +702,7 @@ export class MetaWhatsAppCloudAdapter implements WhatsAppAdapter {
     const body: Record<string, unknown> = {
       messaging_product: 'whatsapp',
     };
+    if (profile.profilePictureHandle !== undefined) body.profile_picture_handle = profile.profilePictureHandle;
     if (profile.about !== undefined) body.about = profile.about;
     if (profile.address !== undefined) body.address = profile.address;
     if (profile.description !== undefined) body.description = profile.description;
@@ -838,6 +881,170 @@ export class MetaWhatsAppCloudAdapter implements WhatsAppAdapter {
     const data = (await res.json()) as { success?: boolean };
     return { success: data.success !== false };
   }
+
+  private async graphJson<T>(res: Response, fallback: string): Promise<T> {
+    if (!res.ok) {
+      const errBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      throw new Error(`${fallback}: ${errBody?.error?.message || `Meta API error (${res.status})`}`);
+    }
+    return (await res.json()) as T;
+  }
+
+  /**
+   * Lists every phone number under a WABA (follows Graph paging links).
+   */
+  async listPhoneNumbers(wabaId: string, accessToken: string): Promise<WabaPhoneNumber[]> {
+    const fields =
+      'id,verified_name,display_phone_number,quality_rating,name_status,code_verification_status,platform_type,throughput';
+    let url: string | undefined = `${this.baseUrl}/${wabaId}/phone_numbers?fields=${fields}&limit=100`;
+    const out: WabaPhoneNumber[] = [];
+    for (let page = 0; url && page < 10; page++) {
+      const res: Response = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      const json = await this.graphJson<{
+        data?: Array<{
+          id: string;
+          verified_name?: string;
+          display_phone_number?: string;
+          quality_rating?: string;
+          name_status?: string;
+          code_verification_status?: string;
+          platform_type?: string;
+          throughput?: { level?: string };
+        }>;
+        paging?: { next?: string };
+      }>(res, 'Failed to list WABA phone numbers');
+      for (const p of json.data ?? []) {
+        const q = String(p.quality_rating ?? '').toUpperCase();
+        out.push({
+          id: p.id,
+          verifiedName: p.verified_name,
+          displayPhoneNumber: p.display_phone_number,
+          qualityRating:
+            q === 'GREEN'
+              ? QualityRating.GREEN
+              : q === 'YELLOW'
+                ? QualityRating.YELLOW
+                : q === 'RED'
+                  ? QualityRating.RED
+                  : QualityRating.UNKNOWN,
+          nameStatus: p.name_status,
+          codeVerificationStatus: p.code_verification_status,
+          platformType: p.platform_type,
+          throughputLevel: p.throughput?.level,
+        });
+      }
+      url = json.paging?.next;
+    }
+    return out;
+  }
+
+  /**
+   * Resumable Upload API: create an upload session, then send the bytes. The returned
+   * handle is what the business profile endpoint expects as profile_picture_handle.
+   */
+  async uploadProfilePicture(
+    appId: string,
+    accessToken: string,
+    file: { data: Buffer; mimeType: string; fileName: string }
+  ): Promise<{ handle: string }> {
+    const startUrl = new URL(`${this.baseUrl}/${appId}/uploads`);
+    startUrl.searchParams.set('file_name', file.fileName);
+    startUrl.searchParams.set('file_length', String(file.data.length));
+    startUrl.searchParams.set('file_type', file.mimeType);
+    const start = await this.graphJson<{ id?: string }>(
+      await fetch(startUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(this.timeoutMs),
+      }),
+      'Failed to start profile picture upload'
+    );
+    if (!start.id) throw new Error('Failed to start profile picture upload: no upload session id returned');
+
+    const uploaded = await this.graphJson<{ h?: string }>(
+      await fetch(`${this.baseUrl}/${start.id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `OAuth ${accessToken}`,
+          file_offset: '0',
+          'Content-Type': file.mimeType,
+        },
+        body: new Uint8Array(file.data),
+        signal: AbortSignal.timeout(this.timeoutMs * 3),
+      }),
+      'Failed to upload profile picture'
+    );
+    if (!uploaded.h) throw new Error('Failed to upload profile picture: no file handle returned');
+    return { handle: uploaded.h };
+  }
+
+  async listBlockedUsers(
+    phoneNumberId: string,
+    accessToken: string,
+    page: { limit?: number; after?: string; before?: string } = {}
+  ): Promise<BlockedUsersPage> {
+    const url = new URL(`${this.baseUrl}/${phoneNumberId}/block_users`);
+    if (page.limit) url.searchParams.set('limit', String(page.limit));
+    if (page.after) url.searchParams.set('after', page.after);
+    if (page.before) url.searchParams.set('before', page.before);
+    const json = await this.graphJson<{
+      data?: Array<{ wa_id: string; input?: string }>;
+      paging?: { cursors?: { after?: string; before?: string } };
+    }>(
+      await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(this.timeoutMs),
+      }),
+      'Failed to list blocked users'
+    );
+    return {
+      items: (json.data ?? []).map(u => ({ waId: u.wa_id, input: u.input })),
+      after: json.paging?.cursors?.after,
+      before: json.paging?.cursors?.before,
+    };
+  }
+
+  private async mutateBlocked(
+    method: 'POST' | 'DELETE',
+    phoneNumberId: string,
+    accessToken: string,
+    users: string[]
+  ): Promise<BlockUsersResult> {
+    const json = await this.graphJson<{
+      block_users?: {
+        added_users?: Array<{ input: string; wa_id: string }>;
+        removed_users?: Array<{ input: string; wa_id: string }>;
+        failed_users?: Array<{ input: string; errors?: Array<{ message?: string }> }>;
+      };
+    }>(
+      await fetch(`${this.baseUrl}/${phoneNumberId}/block_users`, {
+        method,
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', block_users: users.map(user => ({ user })) }),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      }),
+      method === 'POST' ? 'Failed to block users' : 'Failed to unblock users'
+    );
+    const changed = json.block_users?.added_users ?? json.block_users?.removed_users ?? [];
+    return {
+      added: changed.map(u => ({ waId: u.wa_id, input: u.input })),
+      failed: (json.block_users?.failed_users ?? []).map(f => ({
+        input: f.input,
+        message: f.errors?.[0]?.message ?? 'Unknown error',
+      })),
+    };
+  }
+
+  blockUsers(phoneNumberId: string, accessToken: string, users: string[]): Promise<BlockUsersResult> {
+    return this.mutateBlocked('POST', phoneNumberId, accessToken, users);
+  }
+
+  unblockUsers(phoneNumberId: string, accessToken: string, users: string[]): Promise<BlockUsersResult> {
+    return this.mutateBlocked('DELETE', phoneNumberId, accessToken, users);
+  }
 }
 
 /**
@@ -1010,5 +1217,56 @@ export class MockWhatsAppAdapter implements WhatsAppAdapter {
     _pin?: string
   ): Promise<RegisterPhoneNumberResult> {
     return { success: true };
+  }
+
+  /** Test hooks: state the mock reports and records. */
+  mockPhoneNumbers: WabaPhoneNumber[] = [
+    {
+      id: 'phone_mock_1',
+      verifiedName: 'Test Business',
+      displayPhoneNumber: '+1 555-0100',
+      qualityRating: QualityRating.GREEN,
+      nameStatus: 'APPROVED',
+      codeVerificationStatus: 'VERIFIED',
+      platformType: 'CLOUD_API',
+    },
+    {
+      id: 'phone_mock_2',
+      verifiedName: 'Test Business Two',
+      displayPhoneNumber: '+1 555-0101',
+      qualityRating: QualityRating.YELLOW,
+      nameStatus: 'APPROVED',
+      codeVerificationStatus: 'VERIFIED',
+      platformType: 'CLOUD_API',
+    },
+  ];
+  blocked = new Set<string>();
+  uploads: Array<{ appId: string; mimeType: string; bytes: number }> = [];
+
+  async listPhoneNumbers(): Promise<WabaPhoneNumber[]> {
+    return this.mockPhoneNumbers;
+  }
+
+  async uploadProfilePicture(
+    appId: string,
+    _accessToken: string,
+    file: { data: Buffer; mimeType: string; fileName: string }
+  ): Promise<{ handle: string }> {
+    this.uploads.push({ appId, mimeType: file.mimeType, bytes: file.data.length });
+    return { handle: `mock_handle_${this.uploads.length}` };
+  }
+
+  async listBlockedUsers(): Promise<BlockedUsersPage> {
+    return { items: [...this.blocked].map(waId => ({ waId })) };
+  }
+
+  async blockUsers(_p: string, _t: string, users: string[]): Promise<BlockUsersResult> {
+    users.forEach(u => this.blocked.add(u));
+    return { added: users.map(u => ({ waId: u, input: u })), failed: [] };
+  }
+
+  async unblockUsers(_p: string, _t: string, users: string[]): Promise<BlockUsersResult> {
+    users.forEach(u => this.blocked.delete(u));
+    return { added: users.map(u => ({ waId: u, input: u })), failed: [] };
   }
 }

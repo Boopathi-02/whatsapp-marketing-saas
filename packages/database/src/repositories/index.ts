@@ -11,5 +11,7 @@ export * from './campaign.repository.js';
 export * from './conversation.repository.js';
 export * from './quick-reply.repository.js';
 export * from './onboarding-session.repository.js';
+export * from './wallet.repository.js';
+export * from './billing.repository.js';
 
 

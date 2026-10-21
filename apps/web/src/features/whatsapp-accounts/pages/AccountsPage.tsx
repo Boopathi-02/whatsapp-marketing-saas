@@ -42,6 +42,10 @@ import BusinessIcon from '@mui/icons-material/Business';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import { BusinessProfileDialog } from '../components/BusinessProfileDialog.js';
 import { ConnectionHealthDialog } from '../components/ConnectionHealthDialog.js';
+import { PhoneNumbersDialog } from '../components/PhoneNumbersDialog.js';
+import { BlockedUsersDialog } from '../components/BlockedUsersDialog.js';
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
+import BlockIcon from '@mui/icons-material/Block';
 
 export const AccountsPage: React.FC = () => {
   const auth = useOptionalAuth();
@@ -89,6 +93,8 @@ export const AccountsPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<WhatsAppAccountDto | null>(null);
   const [profileTarget, setProfileTarget] = useState<WhatsAppAccountDto | null>(null);
   const [healthTarget, setHealthTarget] = useState<WhatsAppAccountDto | null>(null);
+  const [phonesTarget, setPhonesTarget] = useState<WhatsAppAccountDto | null>(null);
+  const [blockedTarget, setBlockedTarget] = useState<WhatsAppAccountDto | null>(null);
 
   const fetchAccounts = async () => {
     if (!currentWorkspace?.id) return;
@@ -161,6 +167,32 @@ export const AccountsPage: React.FC = () => {
       fetchAccounts();
     } catch (err: unknown) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to sync WhatsApp account');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  /**
+   * Fast path: re-register using the credential we already hold. If Meta rejects it
+   * (expired / revoked token), fall back to the full Embedded Signup flow.
+   */
+  const handleReconnect = async (acc: WhatsAppAccountDto) => {
+    if (!currentWorkspace?.id) return;
+    setActionLoading(`reconnect-${acc.id}`);
+    setError(null);
+    setSuccess(null);
+    try {
+      await api.post<WhatsAppAccountDto>(`/workspaces/${currentWorkspace.id}/whatsapp-accounts/${acc.id}/reconnect`);
+      setSuccess('Account reconnected.');
+      fetchAccounts();
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError && err.status === 409) {
+        setError(`${err.message} Starting a fresh WhatsApp sign-in…`);
+        setActionLoading(null);
+        launchEmbeddedSignup();
+        return;
+      }
+      setError(err instanceof ApiClientError ? err.message : 'Failed to reconnect account');
     } finally {
       setActionLoading(null);
     }
@@ -538,6 +570,26 @@ export const AccountsPage: React.FC = () => {
                         >
                           Health
                         </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="inherit"
+                          startIcon={<PhoneIphoneIcon />}
+                          onClick={() => setPhonesTarget(acc)}
+                          disabled={actionLoading !== null || acc.status !== 'connected'}
+                        >
+                          Numbers
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="inherit"
+                          startIcon={<BlockIcon />}
+                          onClick={() => setBlockedTarget(acc)}
+                          disabled={actionLoading !== null || acc.status !== 'connected'}
+                        >
+                          Blocked
+                        </Button>
                       </Box>
 
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -547,8 +599,8 @@ export const AccountsPage: React.FC = () => {
                             variant="outlined"
                             color="primary"
                             startIcon={<RefreshIcon />}
-                            onClick={launchEmbeddedSignup}
-                            disabled={signupStatus === 'CONNECTING'}
+                            onClick={() => handleReconnect(acc)}
+                            disabled={signupStatus === 'CONNECTING' || actionLoading !== null}
                           >
                             Reconnect
                           </Button>
@@ -771,6 +823,19 @@ export const AccountsPage: React.FC = () => {
         account={profileTarget}
         workspaceId={currentWorkspace?.id}
         onSuccess={fetchAccounts}
+      />
+      <PhoneNumbersDialog
+        open={phonesTarget !== null}
+        onClose={() => setPhonesTarget(null)}
+        account={phonesTarget}
+        workspaceId={currentWorkspace?.id}
+        onAdded={fetchAccounts}
+      />
+      <BlockedUsersDialog
+        open={blockedTarget !== null}
+        onClose={() => setBlockedTarget(null)}
+        account={blockedTarget}
+        workspaceId={currentWorkspace?.id}
       />
       {/* Connection Health & Security Audit Dialog */}
       <ConnectionHealthDialog

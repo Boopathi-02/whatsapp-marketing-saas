@@ -16,6 +16,7 @@ import {
 import { SecurityUtil } from '../../utils/security.js';
 import { emailService } from '../../utils/email.js';
 import { AppError } from '../../utils/errors.js';
+import { BillingService } from '../billing/billing.service.js';
 
 export class WorkspaceService {
   private static generateSlug(name: string): string {
@@ -35,6 +36,7 @@ export class WorkspaceService {
       slug,
       ownerId: userId,
     });
+    await BillingService.startTrialSafely(workspace._id.toString());
 
     return {
       id: workspace._id.toString(),

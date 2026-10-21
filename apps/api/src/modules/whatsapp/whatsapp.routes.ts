@@ -41,5 +41,17 @@ whatsAppRouter.get('/:accountId/profile', requireWorkspace('viewer'), WhatsAppCo
 // Update business profile (Admin+)
 whatsAppRouter.patch('/:accountId/profile', requireWorkspace('admin'), WhatsAppController.updateBusinessProfile);
 
+// Phone numbers under the same WABA: list (Viewer+) / add another (Admin+)
+whatsAppRouter.get('/:accountId/phone-numbers', requireWorkspace('viewer'), WhatsAppController.listPhoneNumbers);
+whatsAppRouter.post('/:accountId/phone-numbers', requireWorkspace('admin'), WhatsAppController.addPhoneNumber);
+
+// Re-register and restore a disconnected / degraded account using its stored credential (Admin+)
+whatsAppRouter.post('/:accountId/reconnect', requireWorkspace('admin'), WhatsAppController.reconnectAccount);
+
+// Blocked users: list (Admin+; contains customer numbers) / block / unblock (Admin+)
+whatsAppRouter.get('/:accountId/blocked-users', requireWorkspace('admin'), WhatsAppController.listBlockedUsers);
+whatsAppRouter.post('/:accountId/blocked-users', requireWorkspace('admin'), WhatsAppController.blockUsers);
+whatsAppRouter.post('/:accountId/blocked-users/unblock', requireWorkspace('admin'), WhatsAppController.unblockUsers);
+
 // Permanently delete account (Admin+)
 whatsAppRouter.delete('/:accountId', requireWorkspace('admin'), WhatsAppController.deleteAccount);

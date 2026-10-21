@@ -11,6 +11,7 @@ const ROUTE_LABELS: Record<string, string> = {
   analytics: 'Analytics',
   billing: 'Billing',
   settings: 'Settings',
+  team: 'Team & Members',
   admin: 'Super Admin',
 };
 

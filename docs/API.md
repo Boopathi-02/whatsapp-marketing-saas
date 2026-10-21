@@ -132,3 +132,56 @@ All API endpoints strictly follow predictable JSON response envelopes.
 
 - `GET /api/v1/health` (Liveness Probe — 200 OK)
 - `GET /api/v1/health/ready` (Readiness Probe — executes real MongoDB `ping`)
+
+## Billing API (workspace-scoped)
+
+All routes are under `/api/v1/workspaces/:workspaceId/billing` and require a Bearer token plus active workspace membership. Money is always an integer in minor units (`amountMinor`) with an ISO-4217 `currency`. Errors use the standard envelope; billing adds the codes `INSUFFICIENT_FUNDS` (402), `SUBSCRIPTION_INACTIVE` (403), `PAYMENT_PROVIDER_NOT_CONFIGURED` (503), `INVALID_SIGNATURE` (401).
+
+| Method & path | Min role | Notes |
+| --- | --- | --- |
+| `GET /subscription` | viewer | status (derived from timestamps), trial window, `canDispatch`, `denialReason`, entitlements. Starts the trial lazily for pre-existing workspaces. |
+| `GET /entitlements` | viewer | `{ status, canDispatch, entitlements }` |
+| `GET /plans` | viewer | Latest active plan versions. `purchasable=false` until prices and a provider exist. |
+| `POST /subscription/checkout` | owner | Returns 503 `PAYMENT_PROVIDER_NOT_CONFIGURED` until a provider and prices are configured. |
+| `POST /subscription/cancel` | owner | Idempotent; audited. |
+| `GET /wallet?currency=` | admin | `{ currency, postedMinor, reservedMinor, availableMinor, lowBalance }` |
+| `GET /wallet/transactions?limit=&cursor=` | admin | Newest-first, cursor = last entry id. |
+| `GET /wallet/top-ups`, `GET /wallet/top-ups/:paymentId` | admin | Payment status. |
+| `POST /wallet/top-ups` | admin | Body `{ amountMinor, currency? }`. Creates a **pending** payment only. |
+| `POST /wallet/adjustments` | owner | Body `{ direction, amountMinor, memo, idempotencyKey }`; appends a ledger entry, audited, cannot overdraw. |
+| `GET /wallet/reconciliation` | owner | Compares cached balances with ledger sum and active reservations. |
+
+### Payment callback (public)
+`POST /api/v1/webhooks/payments` with header `x-payment-signature: <hex HMAC-SHA256 of the raw body using PAYMENT_WEBHOOK_SECRET>` and body `{ eventId, type: "payment.succeeded"|"payment.failed", paymentReference, amountMinor, currency }`. The tenant is resolved from the stored payment, never the payload. Amount/currency must match. Redelivery returns `duplicate: true` and never credits twice.
+
+## WhatsApp channel management (workspace-scoped)
+
+Base: `/api/v1/workspaces/:workspaceId/whatsapp-accounts`. The Meta access token is always the one stored (encrypted) for the account; clients never send or receive tokens. Operations other than `reconnect` return 409 for a disconnected account. Meta failures surface as 502 `SERVICE_UNAVAILABLE` with Meta's message.
+
+| Method & path | Min role | Notes |
+| --- | --- | --- |
+| `GET /:accountId/phone-numbers` | viewer | Numbers under the account's WABA with `connected` (this workspace) and `unavailable` (connected in another workspace) flags. |
+| `POST /:accountId/phone-numbers` | admin | `{ phoneNumberId }`. Must be listed under the WABA; reuses the credential; registers with a random 6-digit PIN stored encrypted; 409 if connected here or elsewhere. |
+| `POST /:accountId/reconnect` | admin | Validates the stored token, re-registers, re-subscribes webhooks, restores `connected`. 409 if the token is invalid (run Embedded Signup again) or another workspace holds the number. |
+| `PATCH /:accountId/profile` | admin | Adds optional `profilePicture: { data: <base64>, mimeType: image/jpeg\|image/png }` (<= 5 MB decoded; the JSON body limit makes ~1.3 MB the practical cap). Magic bytes are checked against `mimeType`. `vertical` must be a Meta vertical; `websites` max 2, http(s). |
+| `GET /:accountId/blocked-users?limit&after&before` | admin | Cursor-paged; names come from this workspace's contacts. |
+| `POST /:accountId/blocked-users` | admin | `{ users: [E.164...] }` (1-25). Returns `{ changed, failed[] }`. |
+| `POST /:accountId/blocked-users/unblock` | admin | Same body. |
+
+All mutations write audit events (`whatsapp.phone_number_added`, `.account_reconnected`, `.profile_updated`, `.users_blocked`, `.users_unblocked`).
+
+## Webhook processing (`POST /api/v1/webhooks/whatsapp`)
+
+Signature-verified, persisted before acknowledgement, then processed asynchronously per change. The owning workspace is resolved per change from our own account records (`phone_number_id`, else WABA + display number), never taken from the payload.
+
+| Field / event | Effect |
+| --- | --- |
+| `messages` statuses | Forward-only status update (a late `sent` never overwrites `read`), scoped to the owning workspace; `failed` stores `{code, message}`; campaign counters change only when a status actually advances. |
+| `messages` inbound | text, button, interactive (button/list reply), image/video/audio/document/sticker (media **id** stored, not downloaded), location, contacts, reaction (annotates the target message), reply context and click-to-WhatsApp referral. Phones normalised to E.164. Idempotent per message id. Ignored for unknown/disconnected numbers. |
+| `phone_number_name_update` | Records `nameStatus`; only `APPROVED` changes the display name. |
+| `phone_number_quality_update` | Records `messagingLimit` and the last quality event. |
+| `account_update` `VERIFIED_ACCOUNT` | Records `businessVerification`. |
+| `account_update` `PARTNER_REMOVED` / `ACCOUNT_DELETED` | Marks every account of that WABA `disconnected`. |
+| `account_update` `PARTNER_APP_INSTALLED` | Logged only; accounts are created solely by our Embedded Signup completion. |
+
+Dedupe key: a single message/status keeps its natural id; a batch uses a hash of all item ids, so a batch containing one already-seen message is not dropped.

@@ -4,7 +4,7 @@ import {
   CampaignRecipientModel,
   ICampaignRecipient,
 } from '../models/campaign_recipient.model.js';
-import { CampaignStatus, MessageStatus } from '@whatsapp-saas/domain';
+import { CampaignStatus, MessageStatus, messageStatusesBefore } from '@whatsapp-saas/domain';
 
 export interface CreateCampaignData {
   workspaceId: string;
@@ -170,23 +170,33 @@ export class CampaignRepository {
     );
   }
 
+  /**
+   * Applies a provider status to a recipient atomically and only if it moves forward.
+   * Returns null for unknown ids and for late / duplicate updates, so callers can safely
+   * increment campaign counters only when this returns a value.
+   */
   static async updateRecipientByMetaMessageId(
     metaMessageId: string,
-    status: MessageStatus
+    status: MessageStatus,
+    errorMessage?: string | null,
+    workspaceId?: string | null
   ): Promise<{ campaignId: string; status: MessageStatus } | null> {
-    const recipient = await CampaignRecipientModel.findOne({ metaMessageId });
+    const set: Record<string, unknown> = { status };
+    if (status === MessageStatus.SENT) set.sentAt = new Date();
+    if (status === MessageStatus.DELIVERED) set.deliveredAt = new Date();
+    if (status === MessageStatus.READ) set.readAt = new Date();
+    if (errorMessage) set.errorMessage = errorMessage;
+
+    const recipient = await CampaignRecipientModel.findOneAndUpdate(
+      {
+        metaMessageId,
+        ...(workspaceId ? { workspaceId: new Types.ObjectId(workspaceId) } : {}),
+        status: { $in: messageStatusesBefore(status) },
+      },
+      { $set: set },
+      { new: true }
+    );
     if (!recipient) return null;
-
-    const update: Record<string, unknown> = { status };
-    if (status === MessageStatus.DELIVERED) update.deliveredAt = new Date();
-    if (status === MessageStatus.READ) update.readAt = new Date();
-
-    recipient.status = status;
-    await recipient.save();
-
-    return {
-      campaignId: recipient.campaignId.toString(),
-      status,
-    };
+    return { campaignId: recipient.campaignId.toString(), status };
   }
 }

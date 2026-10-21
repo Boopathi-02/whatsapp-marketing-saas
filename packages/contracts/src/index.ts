@@ -9,5 +9,6 @@ export * from './template.js';
 export * from './campaign.js';
 export * from './conversation.js';
 export * from './quick-reply.js';
+export * from './billing.js';
 
 

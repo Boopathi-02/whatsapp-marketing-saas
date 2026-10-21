@@ -91,6 +91,28 @@ export async function connectDatabase(
   }
 }
 
+/**
+ * Creates every declared index (non-destructive: never drops). `autoIndex` is off by
+ * default, so without this step unique constraints - including the idempotency keys the
+ * wallet ledger depends on - do not exist. Run at API/worker startup and in migrations.
+ * Returns per-model failures (e.g. pre-existing duplicate data blocking a unique index).
+ */
+export async function ensureIndexes(
+  logger: DatabaseLogger = defaultLogger
+): Promise<{ model: string; error: string }[]> {
+  const failures: { model: string; error: string }[] = [];
+  for (const name of mongoose.modelNames()) {
+    try {
+      await mongoose.model(name).createIndexes();
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      failures.push({ model: name, error });
+      logger.error('Failed to create indexes', { model: name, error });
+    }
+  }
+  return failures;
+}
+
 export async function disconnectDatabase(logger: DatabaseLogger = defaultLogger): Promise<void> {
   if (!connectionInstance || connectionInstance.readyState === 0) {
     return;

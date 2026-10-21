@@ -155,6 +155,33 @@ export class WhatsAppAccountRepository {
   }
 
   /**
+   * Resolves the account that owns a webhook's phone_number_id. Disconnected accounts are
+   * ignored; if several non-disconnected rows exist (should not happen) CONNECTED wins.
+   */
+  static async resolveForWebhook(phoneNumberId: string): Promise<IWhatsAppAccount | null> {
+    const rows = await WhatsAppAccountModel.find({
+      phoneNumberId: phoneNumberId.trim(),
+      status: { $ne: WhatsAppAccountStatus.DISCONNECTED },
+    });
+    return rows.find(r => r.status === WhatsAppAccountStatus.CONNECTED) ?? rows[0] ?? null;
+  }
+
+  /** Accounts of a WABA whose display number (digits only) matches; used by account-level events. */
+  static async findByWabaAndDisplayDigits(wabaId: string, digits: string): Promise<IWhatsAppAccount[]> {
+    const rows = await WhatsAppAccountModel.find({ wabaId: wabaId.trim() });
+    return rows.filter(r => r.displayPhoneNumber.replace(/\D/g, '') === digits);
+  }
+
+  /**
+   * Internal (webhook-driven) field update. Callers pass fixed, code-owned keys such as
+   * 'metadata.messagingLimit'; never user-supplied paths.
+   */
+  static async patchFields(accountId: string, fields: Record<string, unknown>): Promise<void> {
+    if (!Types.ObjectId.isValid(accountId)) return;
+    await WhatsAppAccountModel.updateOne({ _id: new Types.ObjectId(accountId) }, { $set: fields });
+  }
+
+  /**
    * Safely disconnect an account.
    */
   static async disconnect(workspaceId: string, accountId: string): Promise<IWhatsAppAccount | null> {

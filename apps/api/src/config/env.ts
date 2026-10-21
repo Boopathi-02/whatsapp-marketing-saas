@@ -51,6 +51,21 @@ const EnvSchema = z.object({
       }
     )
     .default('a7d2e947cf8e3c1a89b0d3e5271a4f89c02b5e7d91a348f6c1e95b7a32d1840e'),
+  // --- Billing (see docs/decision-register.md) ---
+  TRIAL_DURATION_DAYS: z
+    .string()
+    .transform(val => parseInt(val, 10))
+    .pipe(z.number().int().positive())
+    .default('7'),
+  TRIAL_MONTHLY_MESSAGE_LIMIT: z.coerce.number().int().nonnegative().default(250),
+  TRIAL_CONTACT_LIMIT: z.coerce.number().int().nonnegative().default(500),
+  TRIAL_USER_LIMIT: z.coerce.number().int().nonnegative().default(1),
+  TRIAL_WHATSAPP_ACCOUNT_LIMIT: z.coerce.number().int().nonnegative().default(1),
+  // Wallet currency is an open business decision (B5); this is only the default shown/used.
+  WALLET_DEFAULT_CURRENCY: z.string().length(3).default('USD'),
+  // 'none' = no provider configured (top-ups/checkout refused). 'test' is rejected in production.
+  PAYMENT_PROVIDER: z.enum(['none', 'test']).default('none'),
+  PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

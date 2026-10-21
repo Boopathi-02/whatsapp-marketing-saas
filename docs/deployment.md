@@ -87,3 +87,11 @@ mongodump --uri="mongodb+srv://user:pass@cluster.mongodb.net/pingza_production" 
   - Returns HTTP 200 with `{ status: 'ok', timestamp, uptime, environment }`.
   - Monitors MongoDB connectivity and memory thresholds.
 - **Worker Health:** Standalone process logs heartbeat and queue event metrics.
+
+## Billing / Wallet Deployment Requirements
+
+- **MongoDB must be a replica set** (single-node is fine). Wallet operations use multi-document transactions and intentionally refuse to run without them. Use a `?replicaSet=` URI.
+- **Indexes:** `autoIndex` is off, so the API calls `ensureIndexes()` at startup and refuses to boot if financial unique indexes (ledger/reservation idempotency keys, one wallet per tenant/currency, one payment per provider reference) cannot be created. Existing duplicate data in non-financial collections only logs a warning; resolve it, because those unique constraints (e.g. user email, webhook event id) are otherwise unenforced.
+- Set `PAYMENT_PROVIDER` and `PAYMENT_WEBHOOK_SECRET` once a provider is chosen. `PAYMENT_PROVIDER=test` is ignored when `NODE_ENV=production`.
+- Rollback: the new collections (`planversions`, `subscriptions`, `walletaccounts`, `ledgerentries`, `walletreservations`, `paymenttransactions`, `auditevents`) are additive. Rolling the application back leaves them unused; do not drop `ledgerentries` once real money has moved.
+- Trial expiry is enforced from timestamps at request/dispatch time. A scheduled job calling `SubscriptionRepository.expireDueTrials(now)` (not yet wired) only persists the state and sends notifications.

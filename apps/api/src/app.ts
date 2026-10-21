@@ -18,6 +18,7 @@ import { templateRouter } from './modules/templates/template.routes.js';
 import { campaignRouter } from './modules/campaigns/campaign.routes.js';
 import { conversationRouter } from './modules/conversations/conversation.routes.js';
 import { quickReplyRouter } from './modules/quick-replies/quick-reply.routes.js';
+import { billingRouter, paymentWebhookRouter } from './modules/billing/index.js';
 
 export function createApp(): Express {
   const app = express();
@@ -105,9 +106,11 @@ export function createApp(): Express {
   app.use(`${env.API_PREFIX}/workspaces/:workspaceId/campaigns`, campaignRouter);
   app.use(`${env.API_PREFIX}/workspaces/:workspaceId/conversations`, conversationRouter);
   app.use(`${env.API_PREFIX}/workspaces/:workspaceId/quick-replies`, quickReplyRouter);
+  app.use(`${env.API_PREFIX}/workspaces/:workspaceId/billing`, billingRouter);
   app.use(`${env.API_PREFIX}/invitations`, invitationRouter);
 
-  // 9. Public Webhooks (Meta Cloud API server-to-server)
+  // 9. Public Webhooks (server-to-server; each authenticated by its own signature scheme)
+  app.use(`${env.API_PREFIX}/webhooks/payments`, paymentWebhookRouter);
   app.use(`${env.API_PREFIX}/webhooks`, webhookRouter);
 
   // 10. 404 Handler for undefined routes

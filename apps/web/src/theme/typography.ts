@@ -1,68 +1,42 @@
 import { TypographyOptions } from '@mui/material/styles/createTypography';
+import { fontWeights } from './tokens.js';
+
+export const fontFamily = [
+  'Inter',
+  '-apple-system',
+  'BlinkMacSystemFont',
+  '"Segoe UI"',
+  'Roboto',
+  'sans-serif',
+].join(',');
 
 export const typography: TypographyOptions = {
-  fontFamily: [
-    '"Plus Jakarta Sans"',
-    '-apple-system',
-    'BlinkMacSystemFont',
-    '"Segoe UI"',
-    'Roboto',
-    'sans-serif',
-  ].join(','),
-  h1: {
-    fontWeight: 700,
-    fontSize: '2rem',
-    lineHeight: 1.25,
-    letterSpacing: '-0.02em',
-  },
-  h2: {
-    fontWeight: 700,
-    fontSize: '1.5rem',
-    lineHeight: 1.3,
-    letterSpacing: '-0.02em',
-  },
-  h3: {
-    fontWeight: 600,
-    fontSize: '1.25rem',
-    lineHeight: 1.35,
-    letterSpacing: '-0.01em',
-  },
-  h4: {
-    fontWeight: 600,
-    fontSize: '1.125rem',
-    lineHeight: 1.4,
-  },
-  h5: {
-    fontWeight: 600,
-    fontSize: '1rem',
-    lineHeight: 1.5,
-  },
-  h6: {
-    fontWeight: 600,
-    fontSize: '0.875rem',
-    lineHeight: 1.5,
-  },
-  subtitle1: {
-    fontSize: '1rem',
-    lineHeight: 1.5,
-    fontWeight: 500,
-  },
-  subtitle2: {
-    fontSize: '0.875rem',
-    lineHeight: 1.5,
-    fontWeight: 500,
-  },
-  body1: {
-    fontSize: '0.875rem',
-    lineHeight: 1.6,
-  },
-  body2: {
-    fontSize: '0.75rem',
-    lineHeight: 1.6,
-  },
+  fontFamily,
+  fontSize: 14,
+  fontWeightRegular: fontWeights.regular,
+  fontWeightMedium: fontWeights.medium,
+  fontWeightBold: fontWeights.semibold,
+  // Page heading
+  h1: { fontWeight: fontWeights.semibold, fontSize: '1.25rem', lineHeight: '28px' },
+  // Section headings
+  h2: { fontWeight: fontWeights.semibold, fontSize: '1rem', lineHeight: '24px' },
+  h3: { fontWeight: fontWeights.semibold, fontSize: '1rem', lineHeight: '24px' },
+  h4: { fontWeight: fontWeights.semibold, fontSize: '1rem', lineHeight: '24px' },
+  h5: { fontWeight: fontWeights.semibold, fontSize: '0.875rem', lineHeight: '20px' },
+  h6: { fontWeight: fontWeights.semibold, fontSize: '0.875rem', lineHeight: '20px' },
+  subtitle1: { fontWeight: fontWeights.medium, fontSize: '1rem', lineHeight: '24px' },
+  subtitle2: { fontWeight: fontWeights.medium, fontSize: '0.875rem', lineHeight: '20px' },
+  // Base text
+  body1: { fontSize: '0.875rem', lineHeight: '20px', fontWeight: fontWeights.regular },
+  // Secondary text / helper labels
+  body2: { fontSize: '0.8125rem', lineHeight: '20px', fontWeight: fontWeights.regular },
+  caption: { fontSize: '0.75rem', lineHeight: '16px', fontWeight: fontWeights.regular },
+  overline: { fontSize: '0.75rem', lineHeight: '16px', fontWeight: fontWeights.medium },
   button: {
-    fontWeight: 600,
+    fontWeight: fontWeights.medium,
+    fontSize: '0.875rem',
+    lineHeight: '20px',
     textTransform: 'none',
-    letterSpacing: '0.01em',
+    letterSpacing: 0,
   },
 };

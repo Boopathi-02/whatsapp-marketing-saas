@@ -2,7 +2,7 @@ import http from 'node:http';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
-import { connectDatabase, disconnectDatabase } from '@whatsapp-saas/database';
+import { connectDatabase, disconnectDatabase, ensureIndexes } from '@whatsapp-saas/database';
 
 async function bootstrap(): Promise<void> {
   const app = createApp();
@@ -28,6 +28,16 @@ async function bootstrap(): Promise<void> {
       },
       logger
     );
+    const indexFailures = await ensureIndexes(logger);
+    // Financial collections rely on unique idempotency indexes; refuse to run without them.
+    const FINANCIAL = ['LedgerEntry', 'WalletAccount', 'WalletReservation', 'PaymentTransaction', 'Subscription'];
+    const fatal = indexFailures.filter(f => FINANCIAL.includes(f.model));
+    if (fatal.length > 0) {
+      throw new Error(`Required financial indexes could not be created: ${JSON.stringify(fatal)}`);
+    }
+    if (indexFailures.length > 0) {
+      logger.warn({ indexFailures }, 'Some non-financial indexes could not be created');
+    }
   } catch (dbError) {
     const errorMsg = dbError instanceof Error ? dbError.message : 'Unknown database error';
     logger.warn({
